@@ -14,6 +14,12 @@ console = Console()
 
 PROJECT = 'Base Acrhitecture'
 
+PROJECT_ACTIONS =   [
+                    "Start Testing Wallets",
+                    "Start Testing Requests",
+                    "Start Testing Web3",
+                    "Back"
+                    ]
 
 async def choose_action():
     cat_question = [
@@ -39,12 +45,7 @@ async def choose_action():
         actions = ["Import wallets to Database", "Back"]
 
     if category == PROJECT:
-        actions = [
-                    "Start Testing Wallets",
-                    "Start Testing Requests",
-                    "Start Testing Web3",
-                    "Back"
-                    ]
+        actions = PROJECT_ACTIONS
 
     act_question = [
         inquirer.List(
