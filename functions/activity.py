@@ -55,7 +55,9 @@ async def activity(action: int):
 
     elif action == 3:
         await execute(wallets, test_web3)
-  
+       
+    elif action == 4:
+        await execute(wallets, test_twitter)
 
 async def test_activity(wallet):
     client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Ethereum)
@@ -79,4 +81,12 @@ async def test_web3(wallet):
     controller = Controller(client=client, wallet=wallet)
 
     c = await controller.testing_web3()
+    logger.success(c)
+
+async def test_twitter(wallet):
+    client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Ethereum)
+
+    controller = Controller(client=client, wallet=wallet)
+
+    c = await controller.testing_twitter()
     logger.success(c)

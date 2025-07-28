@@ -17,6 +17,27 @@ def get_wallet(private_key: str, sqlite_query: bool = False) -> Wallet | None:
 
     return db.one(Wallet, Wallet.private_key == private_key)
 
+def update_twitter_token(private_key: str, updated_token: str | None) -> bool:
+    """
+    Updates the Twitter token for a wallet with the given private_key.
+    
+    Args:
+        private_key: The private key of the wallet to update
+        new_token: The new Twitter token to set
+    
+    Returns:
+        bool: True if update was successful, False if wallet not found
+    """
+    if not updated_token:
+        return False
+
+    wallet = db.one(Wallet, Wallet.private_key == private_key)
+    if not wallet:
+        return False
+    
+    wallet.twitter_token = updated_token
+    db.commit()
+    return True
 
 db = DB(f'sqlite:///{WALLETS_DB}', echo=False, pool_recycle=3600, connect_args={'check_same_thread': False})
 db.create_tables(Base)

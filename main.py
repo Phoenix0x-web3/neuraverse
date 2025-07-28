@@ -18,6 +18,7 @@ PROJECT_ACTIONS =   [
                     "Start Testing Wallets",
                     "Start Testing Requests",
                     "Start Testing Web3",
+                    "Start Testing Twitter",
                     "Back"
                     ]
 
@@ -70,6 +71,9 @@ async def choose_action():
 
     elif action == "Start Testing Web3":
         await activity(action=3)
+
+    elif action == "Start Testing Twitter":
+        await activity(action=4)
 
     elif action == "Exit":
         console.print(f"[bold red]Exiting {PROJECT}...[/bold red]")
