@@ -17,7 +17,7 @@ from .data.models import Networks, Network
 
 class Client:
     network: Network
-    account: LocalAccount | None
+    account: LocalAccount
     w3: Web3
 
     def __init__(
@@ -46,7 +46,7 @@ class Client:
                 your_ip = requests.get(
                     'http://eth0.me/', proxies={'http': self.proxy, 'https': self.proxy}, timeout=10
                 ).text.rstrip()
-                if your_ip not in proxy:
+                if not your_ip:
                     raise exceptions.InvalidProxy(f"Proxy doesn't work! Your IP is {your_ip}.")
 
         self.w3 = Web3(
@@ -62,10 +62,8 @@ class Client:
             self.account = self.w3.eth.account.create(extra_entropy=str(random.randint(1, 999_999_999)))
         elif re.match(r'^gAAAA', private_key):
             self.account = self.w3.eth.account.from_key(get_private_key(private_key))
-        elif private_key:
-            self.account = self.w3.eth.account.from_key(private_key=private_key)
         else:
-            self.account = None
+            self.account = self.w3.eth.account.from_key(private_key=private_key)
 
         self.wallet = Wallet(self)
         self.contracts = Contracts(self)
