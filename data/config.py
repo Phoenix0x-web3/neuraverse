@@ -20,4 +20,6 @@ else:
 FILES_DIR = os.path.join(ROOT_DIR, 'files')
 WALLETS_DB = os.path.join(FILES_DIR, 'wallets.db')
 
+SALT_PATH = os.path.join(FILES_DIR, 'salt.dat')
+
 CIPHER_SUITE = None

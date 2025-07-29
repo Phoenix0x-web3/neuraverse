@@ -1,10 +1,12 @@
 import csv
 import os
 import random
+import sys
 from datetime import datetime
 from types import SimpleNamespace
 from typing import List, Dict, Optional
 
+from cryptography.fernet import InvalidToken
 from loguru import logger
 
 from data import config
@@ -93,9 +95,22 @@ class Import:
         edited: list[Wallet] = []
         total = len(wallets)
 
+        check_wallets = db.all(Wallet)
+
+        if len(check_wallets) > 0:
+            # Check pwd1
+            try:
+                check_wallet = check_wallets[0]
+                pk = get_private_key(check_wallet.private_key)
+
+            except Exception as e:
+                sys.exit(f"Database not empty | You must use same password for new wallets | {e}")
+
         for wl in wallets:
 
-            client = Client(private_key=wl.private_key,
+            encoded_private_key = get_private_key(wl.private_key)
+
+            client = Client(private_key=encoded_private_key,
                             network=Networks.Ethereum)
 
             wallet_instance = get_wallet_by_address(address=client.account.address)
@@ -104,7 +119,7 @@ class Import:
                 changed = False
 
                 if wallet_instance.address == client.account.address:
-                    wallet_instance.private_key = prk_encrypt(wl.private_key)
+                    wallet_instance.private_key = prk_encrypt(encoded_private_key)
                     changed = True
 
                 if wallet_instance.proxy != wl.proxy:
@@ -127,7 +142,7 @@ class Import:
                 continue
 
             wallet_instance = Wallet(
-                private_key=prk_encrypt(wl.private_key),
+                private_key=prk_encrypt(encoded_private_key),
                 address=client.account.address,
                 proxy=wl.proxy,
                 twitter_token=wl.twitter_token,

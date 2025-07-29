@@ -1,8 +1,12 @@
 import getpass
+import os
 
 from cryptography.fernet import InvalidToken
 import sys
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
 import settings
@@ -12,32 +16,66 @@ import base64
 import hashlib
 from cryptography.fernet import Fernet
 
-def _derive_fernet_key(password: bytes) -> bytes:
-
-    digest = hashlib.sha256(password).digest()
-    return base64.urlsafe_b64encode(digest)
+from data.config import SALT_PATH
 
 
-def set_cipher_suite(password) -> Fernet:
+def _derive_fernet_key(password: bytes, salt=None) -> bytes:
+
+    try:
+        if salt:
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=100000,
+                backend=default_backend()
+            )
+            return base64.urlsafe_b64encode(kdf.derive(password))
+
+        else:
+            digest = hashlib.sha256(password).digest()
+            return base64.urlsafe_b64encode(digest)
+
+    except TypeError:
+        print('Error! Check salt file! Salt must be bites string')
+        sys.exit(1)
+
+
+
+
+def set_cipher_suite(password) -> None:
     if settings.PRIVATE_KEY_ENCRYPTION:
-        cipher = Fernet(_derive_fernet_key(password))
 
-        config.CIPHER_SUITE = cipher
+        if not os.path.exists(SALT_PATH):
 
-        return cipher
+            cipher = Fernet(_derive_fernet_key(password))
+
+            config.CIPHER_SUITE = cipher
+
+        else:
+            with open(SALT_PATH, 'rb') as f:
+                salt = f.read()
+
+            cipher = Fernet(_derive_fernet_key(password, salt))
+            config.CIPHER_SUITE = cipher
+
 
 def get_private_key(enc_value: str) -> str:
     try:
         if settings.PRIVATE_KEY_ENCRYPTION:
-            return config.CIPHER_SUITE.decrypt(enc_value.encode()).decode()
+            if 'gAAAA' in enc_value:
+                return config.CIPHER_SUITE.decrypt(enc_value.encode()).decode()
+
         return enc_value
-    except InvalidToken:
-        raise Exception(f"{enc_value} | wrong password! Decrypt failed")
+    except Exception:
+        raise InvalidToken(f"{enc_value} | wrong password! Decrypt failed")
         #sys.exit(f"{enc_value} | wrong password! Decrypt failed")
 
 def prk_encrypt(value: str) -> str:
     if settings.PRIVATE_KEY_ENCRYPTION:
-        return config.CIPHER_SUITE.encrypt(value.encode()).decode()
+        if '0x' in value:
+            return config.CIPHER_SUITE.encrypt(value.encode()).decode()
+
     return value
 
 

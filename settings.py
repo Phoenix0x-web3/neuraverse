@@ -1,5 +1,5 @@
 # Whether to encrypt private keys
-PRIVATE_KEY_ENCRYPTION = False
+PRIVATE_KEY_ENCRYPTION = True
 
 # Number of threads to use for processing wallets
 THREADS = 1
