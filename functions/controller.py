@@ -28,7 +28,6 @@ class Controller:
 
     async def testing_twitter(self):
 
-        await self.test_module.twitter_test_module_initialize_with_token()
         await self.test_module.twitter_test_auth()
 
         # await self.test_module.twitter_test_module_initialize_with_login()
@@ -36,4 +35,5 @@ class Controller:
         # await self.test_module.twitter_test_like_tweet()
         # await self.test_module.twitter_test_retweet()
         # await self.test_module.twitter_test_post()
+        await self.test_module.twitter.close()
         return 
