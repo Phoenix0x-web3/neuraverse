@@ -176,5 +176,10 @@ class TestModule(Base):
         logger.debug(headers_dict)
         logger.debug(response.json())
 
+    @controller_log("Testing Twitter")
+    async def twitter_test_name(self):
+        await self.twitter_test_module_initialize_with_token()
+        print(self.twitter.twitter_account.username)
+
 
 

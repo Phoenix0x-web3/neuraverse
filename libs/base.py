@@ -7,6 +7,8 @@ from eth_account.messages import encode_defunct, encode_typed_data, _hash_eip191
 from hexbytes import HexBytes
 from loguru import logger
 from web3.types import TxParams
+from web3.contract.async_contract import AsyncContract
+from web3.contract.contract import Contract
 
 from libs.eth_async.client import Client
 from libs.eth_async.data.models import TokenAmount, TxArgs, Networks
@@ -218,3 +220,17 @@ class Base:
             if receipt:
 
                 return tx_label
+
+    async def check_nft_balance(
+        self,
+        contract: AsyncContract | Contract,
+    ):
+        module_contract = self.client.w3.eth.contract(
+            address=self.client.w3.to_checksum_address(contract.address),
+            abi=contract.abi,
+        )
+        balance = await module_contract.functions.balanceOf(
+            self.client.account.address
+        ).call()
+
+        return balance
