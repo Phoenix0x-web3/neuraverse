@@ -29,8 +29,7 @@ class DiscordStatus:
     duplicate = "DUPLICATE"
     captcha = "CAPTCHA"
     verify = "NEED VERIFY"
-
-
+    
 class BaseAsyncSession(requests.AsyncSession):
     def __init__(
             self,
@@ -347,6 +346,7 @@ class DiscordInviter:
                 logger.error(f'Heartbeat error {e}')
                 break
 
+
     async def get_guild_id(self) -> tuple[bool, str, str]:
         """
         GET /invites/{code}
@@ -420,6 +420,7 @@ class DiscordInviter:
             except Exception:
                 pass
 
+
         need_captcha = False
         captcha_rqdata = captcha_rqtoken = captcha_session_id = None
         try:
@@ -440,7 +441,7 @@ class DiscordInviter:
             need_captcha = True
             self.wallet.discord_status = DiscordStatus.captcha
             db.commit()
-            # todo captcha flow
+            #todo captcha flow
             return False, f'{self.wallet} | {self.__module_name__} | {r.text}'
 
         if not need_captcha:
@@ -664,11 +665,10 @@ class DiscordInviter:
 
         for num in range(1, NUMBER_OF_ATTEMPTS + 1):
             try:
-                logger.info(
-                    f'{self.wallet} | {self.__module_name__} | Starting to join {self.invite_code} channel | attemp {num}/{NUMBER_OF_ATTEMPTS}')
+                logger.info(f'{self.wallet} | {self.__module_name__} | Starting to join {self.invite_code} channel | attemp {num}/{NUMBER_OF_ATTEMPTS}')
 
                 await self.connect()
-                # important pause
+                #important pause
                 await asyncio.sleep(random.randint(120, 160))
 
                 status, location_guild_id, location_channel_id = await self.get_guild_id()
@@ -714,6 +714,7 @@ class DiscordInviter:
 
                 # return of connected
                 if invited:
+
                     await self.ws.close()
                     await self.close()
                     await asyncio.sleep(1)
@@ -726,6 +727,7 @@ class DiscordInviter:
                     f"{self.wallet} | {self.__module_name__} | Attempt {num}/{NUMBER_OF_ATTEMPTS} failed due to: {e}")
 
                 if num == NUMBER_OF_ATTEMPTS:
+
                     return f"Failed | Join Guild {self.invite_code} | channel {self.channel}"
 
                 with contextlib.suppress(Exception):
@@ -735,7 +737,6 @@ class DiscordInviter:
                 await asyncio.sleep(1)
 
         return f"Failed | Join Guild {self.invite_code} | channel {self.channel}"
-
 
 class DiscordOAuth:
 
@@ -794,8 +795,9 @@ class DiscordOAuth:
             oauth_url: str
     ) -> str:
 
+
         url, state = await self.confirm_auth_code(
-            oauth_url=oauth_url,
+            oauth_url = oauth_url,
             integration_type=True
         )
 
@@ -834,6 +836,7 @@ class DiscordOAuth:
             )
 
             if req.status_code <= 202:
+
                 return await self.confirm_auth_code(
                     oauth_url=oauth_url,
                     integration_type=False,

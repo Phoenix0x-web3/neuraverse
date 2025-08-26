@@ -2,9 +2,6 @@ from libs.eth_async.classes import Singleton
 from libs.eth_async.data.models import RawContract, DefaultABIs
 
 
-class Settings:
-    pass
-
 class Contracts(Singleton):
 
     ETH = RawContract(

@@ -17,7 +17,7 @@ console = Console()
 PROJECT = 'Base Acrhitecture'
 
 PROJECT_ACTIONS =   [
-                    "Start Testing Wallets",
+                    "Start Testing Project",
                     "Start Testing Requests",
                     "Start Testing Web3",
                     "Start Testing Twitter",

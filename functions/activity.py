@@ -13,7 +13,13 @@ from utils.db_api.wallet_api import db
 from data.settings import Settings
 from utils.encryption import check_encrypt_param
 
+async def random_sleep_before_start(wallet):
+    random_sleep = random.randint(Settings().random_pause_start_wallet_min, Settings().random_pause_start_wallet_max)
+    now = datetime.now()
 
+    logger.info(f"{wallet} Start at {now + timedelta(seconds=random_sleep)} sleep {random_sleep} seconds before start actions")
+    await asyncio.sleep(random_sleep)
+    
 async def execute(wallets : Wallet, task_func, timeout_hours : int = 0):
     
     while True:
@@ -42,37 +48,49 @@ async def execute(wallets : Wallet, task_func, timeout_hours : int = 0):
 
 async def activity(action: int):
     check_encrypt_param()
-    all_wallets = db.all(Wallet)
+
+    try:
+        check_password_wallet = db.one(Wallet, Wallet.id == 1)
+        Client(private_key=check_password_wallet.private_key)
+
+    except Exception:
+        logger.error(f"Decryption Failed | Wrong Password")
+        return
+
+
+    wallets = db.all(Wallet)
+   
 
     range_wallets = Settings().range_wallets_to_run
     if range_wallets != [0, 0]: 
         start, end = range_wallets
         wallets = [
-            wallet for i, wallet in enumerate(all_wallets, start=1)
+            wallet for i, wallet in enumerate(wallets, start=1)
             if start <= i <= end
         ]
     else:
         if Settings().exact_wallets_to_run:
             wallets = [
-                wallet for i, wallet in enumerate(all_wallets, start=1)
+                wallet for i, wallet in enumerate(wallets, start=1)
                 if i in Settings().exact_wallets_to_run
             ]
-        else:
-            wallets = all_wallets
 
     if action == 1:
-        await execute(wallets, test_activity)
+        await execute(wallets, test_activity, random.randint(Settings().random_pause_wallet_after_completion_min, Settings().random_pause_wallet_after_completion_max))
 
     elif action == 2:
-        await execute(wallets, test_requests, Settings().sleep_after_each_cycle_hours)
+        await execute(wallets, test_requests)
 
     elif action == 3:
-        await execute(wallets, test_web3)
+        await execute(wallets, test_web3, random.randint(Settings().random_pause_wallet_after_completion_min, Settings().random_pause_wallet_after_completion_max))
        
     elif action == 4:
         await execute(wallets, test_twitter)
 
 async def test_activity(wallet):
+    
+    await random_sleep_before_start(wallet=wallet)
+    
     client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Ethereum)
 
     controller = Controller(client=client, wallet=wallet)
@@ -81,6 +99,9 @@ async def test_activity(wallet):
     logger.success(c)
 
 async def test_requests(wallet):
+    
+    await random_sleep_before_start(wallet=wallet)
+    
     client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Ethereum)
 
     controller = Controller(client=client, wallet=wallet)
@@ -89,6 +110,9 @@ async def test_requests(wallet):
     logger.success(c)
 
 async def test_web3(wallet):
+    
+    await random_sleep_before_start(wallet=wallet)
+    
     client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Ethereum)
 
     controller = Controller(client=client, wallet=wallet)
@@ -97,6 +121,9 @@ async def test_web3(wallet):
     logger.success(c)
 
 async def test_twitter(wallet):
+    
+    await random_sleep_before_start(wallet=wallet)
+    
     client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Ethereum)
 
     controller = Controller(client=client, wallet=wallet)

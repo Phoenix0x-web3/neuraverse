@@ -14,7 +14,7 @@ from libs.eth_async.client import Client
 from libs.eth_async.data.models import TokenAmount, TxArgs, Networks
 from libs.eth_async.utils.utils import randfloat
 
-from data.models import Settings, Contracts
+from data.models import Contracts
 from utils.browser import BaseAsyncSession, Browser
 from utils.db_api.models import Wallet
 from utils.logs_decorator import controller_log
@@ -26,7 +26,6 @@ class Base:
         self.client: Client = client
         self.wallet: Wallet = wallet
         self.browser: Browser = Browser(wallet=self.wallet)
-        #todo settings
 
     async def get_token_price(self, token_symbol='ETH', second_token: str = 'USDT') -> float | None:
         token_symbol, second_token = token_symbol.upper(), second_token.upper()

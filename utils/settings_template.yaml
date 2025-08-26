@@ -19,8 +19,8 @@ shuffle_wallets: true
 # Example: [1, 3, 8] - will run only 1, 3 and 8 wallets
 exact_wallets_to_run: []
 
-# Hide wallet address in logs
-hide_wallet_address_log: true
+# Show wallet address in logs
+show_wallet_address_log: false
 
 #Check for github updates
 check_git_updates: true
@@ -28,8 +28,10 @@ check_git_updates: true
 # the log level for the application. Options: DEBUG, INFO, WARNING, ERROR
 log_level : INFO
 
-# Sleep time in hours after full execution of tasks
-sleep_after_each_cycle_hours: 0
+# Delay before running the same wallet again after it has completed all actions (1 - 2 hrs default)
+random_pause_wallet_after_completion:
+  min: 3600
+  max: 7200
 
 # Random pause between wallets in seconds
 random_pause_between_wallets:
@@ -40,6 +42,12 @@ random_pause_between_wallets:
 random_pause_between_actions:
   min: 5
   max: 30
+
+# Random pause between actions in seconds
+random_pause_start_wallet:
+  min: 0
+  max: 60
+
 
 # Telegram Bot ID for notifications
 tg_bot_id: ""

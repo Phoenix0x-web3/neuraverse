@@ -25,12 +25,11 @@ def controller_log(action_name: str = None):
 
             except Exception as e:
                 msg = f"{wallet_name} | {module} | {action} | Failed | {e}"
-                logger.error(msg)
-                raise
+                #logger.error(msg)
+                raise Exception(msg)
         return wrapper
 
     return decorator
-
 
 def action_log(action_name: str = None):
     def decorator(func):

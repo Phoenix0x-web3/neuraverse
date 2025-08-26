@@ -2,11 +2,12 @@ import git
 import os
 import json
 import sys
+import platform
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 from loguru import logger
 
-from .browser import Browser
+from utils.browser import Browser
 from data.settings import Settings
 
 
@@ -162,6 +163,10 @@ def restart_program():
     """
     Restarts the current program with the same arguments.
     """
+    is_windows = platform.system() == "Windows"
+    if is_windows:
+        exit("Please restart the program on Windows after GitHub updates.")
+    
     logger.info("Restarting program after update")
     python = sys.executable
     os.execv(python, [python] + sys.argv)
@@ -188,6 +193,9 @@ async def check_for_updates(
     """
     if not Settings().check_git_updates:
         return
+    
+    repo_name = repo_name.strip().lower().replace(" ", "_")
+        
     logger.debug(f"Checking for updates in {repo_owner}/{repo_name}")
 
     is_git_repo = os.path.exists(os.path.join(repo_path, ".git"))
@@ -240,7 +248,7 @@ async def check_for_updates(
     if local_version_hash == latest_hash:
         latest_dt = datetime.fromisoformat(latest_date.replace("Z", "+00:00"))
         formatted_date = latest_dt.strftime("%d.%m.%Y %H:%M UTC")
-        logger.debug(f"You are using the latest version (commit from {formatted_date})")
+        logger.info(f"You are using the latest version (commit from {formatted_date})")
         return
 
     # Update available

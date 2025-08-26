@@ -123,9 +123,9 @@ class Import:
 
         for wl in wallets:
 
-            encoded_private_key = get_private_key(wl.private_key)
+            decoded_private_key = get_private_key(wl.private_key)
 
-            client = Client(private_key=encoded_private_key,
+            client = Client(private_key=decoded_private_key,
                             network=Networks.Ethereum)
 
             wallet_instance = get_wallet_by_address(address=client.account.address)
@@ -134,7 +134,7 @@ class Import:
                 changed = False
 
                 if wallet_instance.address == client.account.address:
-                    wallet_instance.private_key = prk_encrypt(encoded_private_key)
+                    wallet_instance.private_key = prk_encrypt(decoded_private_key) if not 'gAAAA' in wl.private_key else wl.private_key
                     changed = True
 
                 if wallet_instance.proxy != parse_proxy(wl.proxy):
@@ -157,7 +157,7 @@ class Import:
                 continue
 
             wallet_instance = Wallet(
-                private_key=prk_encrypt(encoded_private_key),
+                private_key=prk_encrypt(wl.private_key) if not 'gAAAA' in wl.private_key else wl.private_key,
                 address=client.account.address,
                 proxy=wl.proxy,
                 twitter_token=wl.twitter_token,

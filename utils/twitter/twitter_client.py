@@ -5,12 +5,11 @@ import urllib.parse
 from typing import Optional, Any, Tuple, Dict
 from utils.browser import Browser
 from loguru import logger
-import libs.twitter as twitter  
+import libs.twitter as twitter
 from libs.twitter.utils import remove_at_sign
 from utils.db_api.models import Wallet
 from utils.db_api.wallet_api import update_twitter_token
-from data.config import logger
-import libs.baseAsyncSession as BaseAsyncSession 
+import libs.baseAsyncSession as BaseAsyncSession
 
 #TODO Move to Exception file
 class BadTwitter(Exception):
@@ -63,10 +62,10 @@ class TwitterClient():
         # Twitter client configuration
         self.client_config = {
             "wait_on_rate_limit": True,
-            "auto_relogin": True,
+            "auto_relogin": False,
             "update_account_info_on_startup": True,
             #TODO: Import CAPMONSTER_API_KEY
-            "capsolver_api_key": "CAPMONSTER_API_KEY", 
+            "capsolver_api_key": "CAPMONSTER_API_KEY",
         }
 
         # Add proxy if specified
@@ -90,7 +89,7 @@ class TwitterClient():
         """
         # Create Twitter client
         self.twitter_client = twitter.Client(
-            self.twitter_account, **self.client_config, 
+            self.twitter_account, **self.client_config,
             headers=BaseAsyncSession.FINGERPRINT_DEFAULT.get("headers", {}),
             impersonate=BaseAsyncSession.FINGERPRINT_DEFAULT.get("impersonate", "chrome136")
         )
@@ -128,7 +127,7 @@ class TwitterClient():
             try:
                 await self.twitter_client.__aexit__(None, None, None)
                 self.twitter_client = None
-                logger.info(f"{self.user} Twitter client closed")
+                logger.debug(f"{self.user} Twitter client closed")
             except Exception as e:
                 logger.error(
                     f"{self.user} Error closing Twitter client: {str(e)}"
@@ -177,6 +176,7 @@ class TwitterClient():
 
         # Check if already following the user
         is_following = await self._check_if_following(user_id=user.id)
+
         if is_following:
             logger.info(f"{self.user} Already following @{clean_account_name}")
             return True

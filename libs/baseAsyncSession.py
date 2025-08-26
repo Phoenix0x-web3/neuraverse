@@ -22,7 +22,6 @@ FINGERPRINT_MAC136 = {
     "accept-language": "en-US,en;q=0.9",
 }
 
-
 class BaseAsyncSession(requests.AsyncSession):
     def __init__(
             self,

@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped, mapped_column
+from data.settings import Settings
 
 class Base(DeclarativeBase):
     pass
@@ -16,8 +17,17 @@ class Wallet(Base):
     proxy: Mapped[str] = mapped_column(default=None, nullable=True)
     discord_token: Mapped[str] = mapped_column(default=None, nullable=True)
     twitter_token: Mapped[str] = mapped_column(default=None, nullable=True)
-    next_activity_action_time: Mapped[datetime | None] = mapped_column(default=None)
+    #next_activity_action_time: Mapped[datetime | None] = mapped_column(default=None, nullable=True)
+    points: Mapped[int] = mapped_column(default=0)
+    invite_code: Mapped[str] = mapped_column(default="")
+    wallet_type: Mapped[str] = mapped_column(default='')
+    discord_proxy: Mapped[str] = mapped_column(default=None, nullable=True)
+    discord_status: Mapped[str] = mapped_column(default=None, nullable=True)
+    completed: Mapped[bool] = mapped_column(default=False)
 
 
     def __repr__(self):
-        return f'[{self.id}][{self.address}]'
+        if Settings().show_wallet_address_log:
+            return f'[{self.id}][{self.address}]'
+        return f'[{self.id}]'
+        

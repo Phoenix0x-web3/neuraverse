@@ -16,4 +16,5 @@ RPC_MAP = {
     'ink': 'https://rpc-qnd.inkonchain.com',
     'mode': 'https://mainnet.mode.network',
     'op_bnb': 'https://opbnb-mainnet-rpc.bnbchain.org',
+    'pharos': 'https://testnet.dplabs-internal.com',
 }

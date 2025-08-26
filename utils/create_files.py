@@ -1,16 +1,17 @@
 from data.config import FILES_DIR, SETTINGS_FILE, TEMPLATE_SETTINGS_FILE
 from libs.eth_async.utils.files import touch
 import os
-import shutil
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from copy import deepcopy
+import shutil
 
 REQUIRED_FILES = [
     "private_keys.txt",
     "proxy.txt",
     "twitter_tokens.txt",
     "discord_tokens.txt",
+    "discord_proxy.txt",
 ]
 
 def create_files() -> None:
@@ -82,5 +83,5 @@ def merge_settings(current: CommentedMap, template: CommentedMap) -> CommentedMa
 def reset_folder():
     shutil.rmtree(FILES_DIR)
     create_files()
-
+    
 create_files()
