@@ -12,6 +12,7 @@ class Settings(Singleton):
         with open(SETTINGS_FILE, 'r') as file:
             json_data = yaml.safe_load(file) or {}
 
+        self.check_updates = json_data.get("check_updates", True)
         self.private_key_encryption = json_data.get("private_key_encryption", False)
         self.threads = json_data.get("threads", 4)
         self.exact_wallets_to_run = json_data.get("exact_wallets_to_run", [])

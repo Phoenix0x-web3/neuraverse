@@ -10,6 +10,7 @@ from functions.activity import activity
 from utils.db_import_export_sync import Import, Export
 from utils.encryption import check_encrypt_param
 from utils.output import show_channel_info
+from utils.git_version import check_for_updates
 
 console = Console()
 
@@ -92,6 +93,8 @@ async def choose_action():
 
 async def main():
     create_files()
+
+    await check_for_updates(repo_name="base_architecture", repo_private=True)
     await choose_action()
 
 if __name__ == '__main__':

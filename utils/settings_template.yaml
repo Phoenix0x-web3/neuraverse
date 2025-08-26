@@ -1,4 +1,6 @@
 #Settings for the application
+#Check for git updates
+check_updates: true
 
 # Whether to encrypt private keys
 private_key_encryption: true

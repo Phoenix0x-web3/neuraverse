@@ -26,7 +26,7 @@ FINGERPRINT_MAC136 = {
 class BaseAsyncSession(requests.AsyncSession):
     def __init__(
             self,
-            proxy: str = None,
+            proxy: str | None = None,
             fingerprint: dict = FINGERPRINT_DEFAULT,
             **session_kwargs,
     ):
