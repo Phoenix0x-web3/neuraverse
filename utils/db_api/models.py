@@ -17,6 +17,7 @@ class Wallet(Base):
     proxy: Mapped[str] = mapped_column(default=None, nullable=True)
     discord_token: Mapped[str] = mapped_column(default=None, nullable=True)
     twitter_token: Mapped[str] = mapped_column(default=None, nullable=True)
+    twitter_status: Mapped[str] = mapped_column(default="OK", nullable=True)
     #next_activity_action_time: Mapped[datetime | None] = mapped_column(default=None, nullable=True)
     points: Mapped[int] = mapped_column(default=0)
     invite_code: Mapped[str] = mapped_column(default="")
