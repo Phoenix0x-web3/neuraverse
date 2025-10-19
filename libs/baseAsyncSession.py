@@ -32,7 +32,7 @@ class BaseAsyncSession(requests.AsyncSession):
 
         init_kwargs = {
             "headers": headers,
-            "impersonate": getattr(requests.BrowserType, fingerprint.get("impersonate")),
+            "impersonate": fingerprint.get("impersonate"),
             **session_kwargs,
         }
 
