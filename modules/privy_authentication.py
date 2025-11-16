@@ -15,7 +15,7 @@ from utils.db_api.models import Wallet
 from utils.db_api.wallet_api import update_wallet_info
 
 
-class PrivyAuth():
+class PrivyAuth:
     __module__ = "Privy authentication"
     BASE_URL = "https://privy.neuraprotocol.io/api/v1"
 
@@ -41,7 +41,6 @@ class PrivyAuth():
         return f"{self.__module__} | [{self.wallet.address}]"
 
     async def privy_authorize(self) -> bool:
-        
         if self.cookies:
             try:
                 logger.info(f"{self.wallet} | Trying refresh via cookie")
@@ -51,14 +50,13 @@ class PrivyAuth():
                     return True
                 else:
                     logger.warning(f"{self.wallet} | Refresh via cookie failed → fallback to full SIWE")
-                    
+
             except Exception as e:
                 logger.warning(f"{self.wallet} | Failed to refresh session via cookies — {e}")
 
         try:
-            
             logger.info(f"{self.wallet} | Getting new session_token via SIWE...")
-            
+
             if await self.authenticate_via_siwe():
                 self.authentication = True
                 logger.success(f"{self.wallet} | SIWE: OK (session_token & identity_token & cookies saved)")
@@ -66,21 +64,19 @@ class PrivyAuth():
             else:
                 logger.error(f"{self.wallet} | SIWE failed: session_token, identity_token or cookies missing")
                 return False
-                
+
         except Exception as e:
             logger.error(f"{self.wallet} | SIWE exception: {e}")
             return False
 
     async def refresh_session_via_cookie(self) -> bool:
-        
         cookies = {
-                k: v
-                for k, v in (self.wallet.cookies or {}).items()
-                if k in {"privy-token", "privy-id-token", "privy-ssesion", "privy-refresh-token", "privy-access-token"}
-                }
-        
+            k: v
+            for k, v in (self.wallet.cookies or {}).items()
+            if k in {"privy-token", "privy-id-token", "privy-ssesion", "privy-refresh-token", "privy-access-token"}
+        }
+
         payload = {"refresh_token": "deprecated"}
-        
 
         try:
             response = await self.session.post(url=f"{self.BASE_URL}/sessions", cookies=cookies, headers=self.headers, json=payload)
@@ -99,8 +95,7 @@ class PrivyAuth():
 
             raw_set_cookie = response.headers.get("set-cookie")
             cookie_header = self._extract_privy_tokens(raw_set_cookie)
-            
-            
+
             if not (session_token and identity_token and cookie_header):
                 logger.error(
                     f"{self.wallet} | SIWE: FAILED (session_token={bool(session_token)},"
@@ -115,11 +110,11 @@ class PrivyAuth():
             self.session_token = session_token
             self.identity_token = identity_token
             self.cookies = {k: v for k, v in (self.wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-ssesion"}}
-            
+
         except Exception as e:
             logger.error(f"{self.wallet} | Failed to parse response or extract tokens — {e}")
             return False
-        
+
         return True
 
     async def authenticate_via_siwe(self) -> bool:
@@ -159,8 +154,7 @@ class PrivyAuth():
 
             raw_set_cookie = response.headers.get("set-cookie")
             cookie_header = self._extract_privy_tokens(raw_set_cookie)
-            
-            
+
             if not (session_token and identity_token and cookie_header):
                 logger.error(
                     f"{self.wallet} | SIWE: FAILED (session_token={bool(session_token)},"
@@ -175,7 +169,7 @@ class PrivyAuth():
             self.session_token = session_token
             self.identity_token = identity_token
             self.cookies = {k: v for k, v in (self.wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-ssesion"}}
- 
+
         except Exception as e:
             logger.error(f"{self.wallet} | Failed to complete SIWE authentication — {e}")
             return False
@@ -238,24 +232,23 @@ class PrivyAuth():
         return nonce
 
     async def send_analytics_events(self, is_new_user: bool) -> bool:
-        
         try:
             cookies = {
                 k: v
                 for k, v in (self.wallet.cookies or {}).items()
                 if k in {"privy-token", "privy-id-token", "privy-ssesion", "privy-refresh-token", "privy-access-token"}
-                }
-            
-            logger.debug(f'{self.cookies}')
-            logger.debug(f'{cookies}')
+            }
+
+            logger.debug(f"{self.cookies}")
+            logger.debug(f"{cookies}")
 
             headers = {
                 **self.headers,
                 "authorization": f"Bearer {self.identity_token}",
             }
-            
+
             utc_time_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-            
+
             payload = {
                 "event_name": "sdk_authenticate_siwe",
                 "client_id": self.token_id,
@@ -280,9 +273,8 @@ class PrivyAuth():
         except Exception as e:
             logger.error(f"{self.wallet} | Analytics event processing failed — {e}")
             raise RuntimeError("Analytics event processing failed")
-        
+
         try:
-            
             payload = {
                 "event_name": "sdk_authenticate",
                 "client_id": self.token_id,
@@ -307,8 +299,6 @@ class PrivyAuth():
         except Exception as e:
             logger.error(f"{self.wallet} | Analytics event processing failed — {e}")
             raise RuntimeError("Analytics event processing failed")
-
-        
 
         return True
 

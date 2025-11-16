@@ -1,9 +1,10 @@
 import base64
 import hashlib
+import json
 import os
 import re
 import time
-import json
+
 from loguru import logger
 
 from data.constants import DEFAULT_HEADERS
@@ -12,8 +13,8 @@ from libs.eth_async.client import Client
 from modules.privy_authentication import PrivyAuth
 from utils.browser import Browser
 from utils.db_api.models import Wallet
-from utils.twitter.twitter_client import TwitterOauthData
 from utils.db_api.wallet_api import update_wallet_info
+from utils.twitter.twitter_client import TwitterOauthData
 
 
 class NeuraVerse:
@@ -208,7 +209,7 @@ class NeuraVerse:
 
         try:
             logger.info(f"{self.wallet} | Starting faucet claim process")
-            
+
             headers = {
                 "sec-ch-ua-platform": '"Windows"',
                 "Referer": "https://neuraverse.neuraprotocol.io/?section=faucet",
@@ -226,7 +227,7 @@ class NeuraVerse:
 
             action_id = None
             js_code = response.text
-    
+
             pattern = r'createServerReference\)\("([a-f0-9]+)"'
             match = re.search(pattern, js_code)
 
@@ -260,13 +261,10 @@ class NeuraVerse:
             }
 
             if self.wallet.faucet_last_claim:
-                cookie = {
-                    **self.privy.cookies,
-                    'faucet_last_claim': self.wallet.faucet_last_claim
-                }
+                cookie = {**self.privy.cookies, "faucet_last_claim": self.wallet.faucet_last_claim}
             else:
                 cookie = self.privy.cookies
-                
+
             logger.debug(f"{self.wallet} | Faucet POST cookies keys: {list(cookie.keys())}")
 
             data = '["' + self.client.account.address + '",267,"' + self.privy.identity_token + '",true]'
@@ -278,7 +276,7 @@ class NeuraVerse:
                 headers=headers,
                 data=data,
             )
-            
+
             logger.debug(f"{self.wallet} | Faucet POST response text (trimmed): {response.text[:600]}")
 
             if response.status_code != 200:
@@ -288,19 +286,18 @@ class NeuraVerse:
             if "Insufficient neuraPoints." in response.text:
                 logger.error(f"[{self.wallet}] | Insufficient neuraPoints.")
                 return False
-            
+
             elif "Faucet queue full" in response.text:
                 logger.error(f"[{self.wallet}] | Faucet queue full, please retry in a minute.")
                 return False
-                
+
             elif "Address has already received" in response.text:
                 logger.warning(f"{self.wallet} | Address has already received")
                 return False
-            
+
             elif "ANKR distribution successful" in response.text:
-                
                 logger.success(f"[{self.wallet}] | Faucet claimed successfully")
-                
+
                 ts_ms = int(time.time() * 1000)
                 faucet_last_claim = json.dumps({"timestamp": ts_ms}, separators=(",", ":"))
                 self.wallet.faucet_last_claim = faucet_last_claim
@@ -309,19 +306,18 @@ class NeuraVerse:
                     name_column="faucet_last_claim",
                     data=faucet_last_claim,
                 )
-        
+
             else:
                 logger.error(f"{self.wallet} | Faucet response did not match any known substrings; raw text (trimmed): {response.text[:600]}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"{self.wallet} | Error — {e}")
             return False
 
         try:
-            
             logger.info(f"{self.wallet} | Sending faucet event POST to {self.BASE_URL}/events")
-            
+
             event_headers = {
                 "accept": "application/json, text/plain, */*",
                 "authorization": f"Bearer {self.privy.identity_token}",
@@ -329,7 +325,7 @@ class NeuraVerse:
                 "origin": "https://neuraverse.neuraprotocol.io",
                 "referer": "https://neuraverse.neuraprotocol.io/",
             }
-            
+
             event_response = await self.session.post(
                 url=f"{self.BASE_URL}/events", cookies=self.privy.cookies, headers=event_headers, json={"type": "faucet:claimTokens"}
             )
@@ -339,7 +335,7 @@ class NeuraVerse:
                 raise RuntimeError(f"Non-200 faucet event response ({event_response.status_code})")
 
             logger.success(f"[{self.wallet}] | Faucet event sent successfully")
-            
+
             return True
 
         except Exception as e:
@@ -430,7 +426,7 @@ class NeuraVerse:
 
     async def get_twitter_link(self) -> str:
         # Not working yet
-        return ''
+        return ""
 
         if not self.privy.authentication:
             await self.privy.privy_authorize()

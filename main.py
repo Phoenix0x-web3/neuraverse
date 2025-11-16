@@ -100,7 +100,7 @@ async def choose_action():
 
     elif action == "6. Bridge":
         await activity(action=6)
-        
+
     elif action == "7. Bridge Sepolia -> Neura(all ANKR)":
         await activity(action=7)
 

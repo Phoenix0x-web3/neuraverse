@@ -19,7 +19,7 @@ async def random_sleep_before_start(wallet):
     now = datetime.now()
 
     logger.info(f"{wallet} Start at {now + timedelta(seconds=random_sleep)} sleep {random_sleep} seconds before start actions")
-    #await asyncio.sleep(random_sleep)
+    # await asyncio.sleep(random_sleep)
 
 
 async def execute(wallets: List[Wallet], task_func, random_pause_wallet_after_completion: int = 0):
@@ -103,7 +103,7 @@ async def activity(action: int):
             wallets,
             bridge,
         )
-        
+
     elif action == 7:
         await execute(
             wallets,
@@ -219,10 +219,9 @@ async def bridge(wallet):
         await controller.execute_auto_bridge()
     except Exception as e:
         logger.error(f"Error — {e}")
-        
+
 
 async def bridge_all_to_neura(wallet):
-    
     client = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.NeuraTestnet)
     client_sepolia = Client(private_key=wallet.private_key, proxy=wallet.proxy, network=Networks.Sepolia)
     controller = Controller(client=client, wallet=wallet, client_sepolia=client_sepolia)
@@ -231,10 +230,3 @@ async def bridge_all_to_neura(wallet):
         await controller.execute_auto_bridge(bridge_all_to_neura=True)
     except Exception as e:
         logger.error(f"Error — {e}")
-    
-        
-    
-    
-    
-
-

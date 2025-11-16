@@ -1,5 +1,8 @@
+import asyncio
+import random
 import time
-import asyncio, random
+from decimal import Decimal
+
 from eth_abi.abi import encode as abi_encode
 from loguru import logger
 from web3.types import TxParams
@@ -11,7 +14,6 @@ from libs.eth_async.client import Client
 from libs.eth_async.data.models import DefaultABIs, RawContract, TokenAmount, TxArgs
 from utils.browser import Browser
 from utils.db_api.models import Wallet
-from decimal import Decimal
 
 
 class ZottoSwap(Base):
@@ -136,10 +138,9 @@ class ZottoSwap(Base):
             pool_address_1 = await pools_contract.functions.computePoolAddress(token_0.address, token_1.address).call()
             await asyncio.sleep(random.uniform(1, 2))
             pool_address_2 = await pools_contract.functions.computePoolAddress(token_1.address, token_0.address).call()
-            
-            
+
             pools_info = await self.get_pools_info(pools=[pool_address_1.lower(), pool_address_2.lower()])
-              
+
             logger.debug(f"{self.wallet} | DEBUG: after get_pools_info → {pools_info}")
 
             logger.debug(f"{self.wallet} | DEBUG: scanning pools_info for liquidity")
@@ -182,22 +183,27 @@ class ZottoSwap(Base):
             return {}
 
     async def execute_swap(
-        self, amount: TokenAmount, from_token: RawContract, to_token: RawContract, max_gas_price: int, tokens_price: dict | None = None, slippage: float = 15.0,
+        self,
+        amount: TokenAmount,
+        from_token: RawContract,
+        to_token: RawContract,
+        max_gas_price: int,
+        tokens_price: dict | None = None,
+        slippage: float = 15.0,
     ) -> bool:
         try:
             logger.debug(f"{self.wallet} | DEBUG: execute_swap START — amount={amount.Ether}, from={from_token.title}, to={to_token.title}")
 
             if amount.Wei <= 0:
                 raise ValueError(f"Invalid amount: {amount.Wei}")
-            
+
             if max_gas_price:
-                
                 gas_price = await self.client.transactions.gas_price()
                 logger.debug(f"{self.wallet} | DEBUG: initial gas price — {gas_price.Gwei} gwei")
 
                 if gas_price.Gwei > max_gas_price:
                     logger.warning(f"{self.wallet} | High gas price detected: {gas_price.Gwei} gwei")
-                    
+
                     wait_start = time.time()
                     while gas_price.Gwei > max_gas_price:
                         elapsed = time.time() - wait_start
@@ -212,18 +218,18 @@ class ZottoSwap(Base):
                         await asyncio.sleep(sleep)
                         gas_price = await self.client.transactions.gas_price()
                         logger.debug(f"{self.wallet} | DEBUG: refreshed gas price — {gas_price.Gwei} gwei")
-                    
+
                     logger.info(f"{self.wallet} | Gas normalized below threshold: {gas_price.Gwei} gwei — continuing execution")
                 else:
                     logger.debug(f"{self.wallet} | DEBUG: gas price acceptable — {gas_price.Gwei} gwei")
-                
+
             swap_from_native = from_token.address.lower() == Contracts.ANKR.address.lower()
 
             if not swap_from_native:
+                approve = await self.approve_interface(
+                    token_address=from_token.address, spender=Contracts.ZOTTO_ROUTER_ADDRESS.address, amount=amount, title=from_token.title
+                )
 
-                approve = await self.approve_interface(token_address=from_token.address, spender=Contracts.ZOTTO_ROUTER_ADDRESS.address, amount=amount, title=from_token.title)
-                
-                
                 if approve:
                     sleep = random.randint(5, 10)
                     logger.success(f"{self.wallet} | Approved {amount.Ether} {from_token.title}, sleeping {sleep}s before swap")
@@ -233,9 +239,8 @@ class ZottoSwap(Base):
                     return False
 
             deadline_ms = int(time.time() * 1000) + (30 * 60 * 1000)
-            
+
             if tokens_price:
-    
                 price = Decimal(str(tokens_price[from_token.address.lower()]))
                 amt = Decimal(str(amount.Ether))
                 slip = Decimal(str((100 - slippage) / 100))
@@ -253,7 +258,7 @@ class ZottoSwap(Base):
                 amount_out_min = None
 
             recipient_address = "0x0000000000000000000000000000000000000000" if swap_from_native else self.client.account.address
-            
+
             inner = self._encode_swap_params(
                 from_token=from_token,
                 to_token=to_token,
@@ -269,7 +274,7 @@ class ZottoSwap(Base):
                     else await self.client.transactions.get_decimals(contract=to_token.address),
                 ),
             )
-            
+
             calls = [bytes.fromhex(inner[2:])]
 
             if not swap_from_native:
@@ -282,10 +287,10 @@ class ZottoSwap(Base):
             tx_value = amount.Wei if swap_from_native else 0
             tx_params = TxArgs(data=calls).tuple()
             data = contract.encode_abi("multicall", args=tx_params)
-            
+
             transaction = await self.client.transactions.sign_and_send(TxParams(to=Contracts.ZOTTO_ROUTER_ADDRESS.address, data=data, value=tx_value))
             recipient = await transaction.wait_for_receipt(client=self.client, timeout=300)
-            
+
             if recipient["status"] != 1:
                 logger.error(f"{self.wallet} | Swap transaction reverted on-chain")
                 raise Exception("Swap tx reverted on-chain")
@@ -322,7 +327,6 @@ class ZottoSwap(Base):
         return "0x1679c792" + swap_params.hex()
 
     async def _current_balances(self, tokens: list) -> dict:
-        
         balances = {}
         for token in tokens:
             logger.debug(f"{self.wallet} | DEBUG: checking balance for {token.title} ({token.address})")

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from eth_account.datastructures import SignedTransaction
 from hexbytes import HexBytes
-from web3 import AsyncWeb3, Web3
+from web3 import AsyncWeb3
 
 # from web3.middleware import ExtraDataToPOAMiddleware
 from web3.types import TxParams, TxReceipt, _Hash32
@@ -176,7 +176,7 @@ class Transactions:
 
         if "gasPrice" not in tx_params and "maxFeePerGas" not in tx_params:
             gas_price = int((await self.gas_price()).Wei * 1.1)
-            
+
             if self.client.network.tx_type == 2:
                 tx_params["maxFeePerGas"] = gas_price
 

@@ -1,8 +1,9 @@
+import asyncio
+import random
+
 from loguru import logger
 from web3.types import TxParams
 
-import asyncio
-import random
 from data.models import Contracts
 from data.settings import Settings
 from libs.base import Base
@@ -140,11 +141,9 @@ class Bridge(Base):
             sucsess = await self.bridge_sepolia_to_neura(amount_eth=TokenAmount(amount=tankr_balance, decimals=18, wei=True))
 
             random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
-            
+
             if not sucsess:
-                logger.error(
-                    f"{self.wallet} | Bridge Sepolia → Neura (ALL) failed, sleeping {random_sleep}s before exit"
-                )
+                logger.error(f"{self.wallet} | Bridge Sepolia → Neura (ALL) failed, sleeping {random_sleep}s before exit")
                 await asyncio.sleep(random_sleep)
                 return False
 
@@ -182,22 +181,18 @@ class Bridge(Base):
             logger.info(f"{self.wallet} | Bridging {bridge_amount.Ether} ANKR from Neura → Sepolia")
 
             sucsess = await self.bridge_neura_to_sepolia(amount_eth=bridge_amount)
-            
+
             random_sleep = random.randint(
                 self.settings.random_pause_between_actions_min,
                 self.settings.random_pause_between_actions_max,
             )
-            
+
             if not sucsess:
-                logger.error(
-                    f"{self.wallet} | Percentage-based bridge Neura → Sepolia failed, sleeping {random_sleep}s before exit"
-                )
+                logger.error(f"{self.wallet} | Percentage-based bridge Neura → Sepolia failed, sleeping {random_sleep}s before exit")
                 await asyncio.sleep(random_sleep)
                 return False
 
-            logger.success(
-                f"{self.wallet} | Percentage-based bridge Neura → Sepolia completed: {bridge_amount.Ether} ANKR, sleeping {random_sleep}s"
-            )
+            logger.success(f"{self.wallet} | Percentage-based bridge Neura → Sepolia completed: {bridge_amount.Ether} ANKR, sleeping {random_sleep}s")
             await asyncio.sleep(random_sleep)
 
             return True
@@ -237,9 +232,7 @@ class Bridge(Base):
             )
 
             if not sucsess:
-                logger.error(
-                    f"{self.wallet} | Percentage-based bridge Sepolia → Neura failed, sleeping {random_sleep}s before exit"
-                )
+                logger.error(f"{self.wallet} | Percentage-based bridge Sepolia → Neura failed, sleeping {random_sleep}s before exit")
                 await asyncio.sleep(random_sleep)
                 return False
 
