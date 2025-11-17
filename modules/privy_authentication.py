@@ -36,12 +36,10 @@ class PrivyAuth:
     def __repr__(self):
         return f"{self.__module__} | [{self.wallet.address}]"
 
-
-
     @property
     def cookies(self) -> dict:
         return {k: v for k, v in (self.wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-session"}}
-        
+
     async def privy_authorize(self) -> bool:
         if self.cookies:
             try:
@@ -72,7 +70,6 @@ class PrivyAuth:
             return False
 
     async def refresh_session_via_cookie(self) -> bool:
-        
         cookies = {
             k: v
             for k, v in (self.wallet.cookies or {}).items()
@@ -113,7 +110,7 @@ class PrivyAuth:
             self.wallet.session_token = session_token
             self.wallet.identity_token = identity_token
             self.wallet.cookies = cookie_header
-           
+
         except Exception as e:
             logger.error(f"{self.wallet} | Failed to parse response or extract tokens — {e}")
             return False

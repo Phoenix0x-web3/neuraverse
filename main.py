@@ -103,7 +103,7 @@ async def choose_action():
 
     elif action == "7. Bridge Sepolia -> Neura(all ANKR)":
         await activity(action=7)
-        
+
     elif action == "1. Reset files Folder":
         console.print("This action will delete the files folder and reset it.")
         answer = input("Are you sure you want to perform this action? y/N ")
