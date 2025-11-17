@@ -24,10 +24,6 @@ class PrivyAuth:
         self.wallet = wallet
         self.session = Browser()
         self.authentication = False
-        self.session_token = wallet.session_token
-        self.identity_token = wallet.identity_token
-        self.cookies = {k: v for k, v in (wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-ssesion"}}
-
         self.token_id = self._resolve_privy_ca_id()
 
         self.headers = {
@@ -40,6 +36,12 @@ class PrivyAuth:
     def __repr__(self):
         return f"{self.__module__} | [{self.wallet.address}]"
 
+
+
+    @property
+    def cookies(self) -> dict:
+        return {k: v for k, v in (self.wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-session"}}
+        
     async def privy_authorize(self) -> bool:
         if self.cookies:
             try:
@@ -70,6 +72,7 @@ class PrivyAuth:
             return False
 
     async def refresh_session_via_cookie(self) -> bool:
+        
         cookies = {
             k: v
             for k, v in (self.wallet.cookies or {}).items()
@@ -107,10 +110,10 @@ class PrivyAuth:
             update_wallet_info(address=self.wallet.address, name_column="identity_token", data=identity_token)
             update_wallet_info(address=self.wallet.address, name_column="cookies", data=cookie_header)
 
-            self.session_token = session_token
-            self.identity_token = identity_token
-            self.cookies = {k: v for k, v in (self.wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-ssesion"}}
-
+            self.wallet.session_token = session_token
+            self.wallet.identity_token = identity_token
+            self.wallet.cookies = cookie_header
+           
         except Exception as e:
             logger.error(f"{self.wallet} | Failed to parse response or extract tokens — {e}")
             return False
@@ -166,9 +169,9 @@ class PrivyAuth:
             update_wallet_info(address=self.wallet.address, name_column="identity_token", data=identity_token)
             update_wallet_info(address=self.wallet.address, name_column="cookies", data=cookie_header)
 
-            self.session_token = session_token
-            self.identity_token = identity_token
-            self.cookies = {k: v for k, v in (self.wallet.cookies or {}).items() if k in {"privy-token", "privy-id-token", "privy-ssesion"}}
+            self.wallet.session_token = session_token
+            self.wallet.identity_token = identity_token
+            self.wallet.cookies = cookie_header
 
         except Exception as e:
             logger.error(f"{self.wallet} | Failed to complete SIWE authentication — {e}")
@@ -244,7 +247,7 @@ class PrivyAuth:
 
             headers = {
                 **self.headers,
-                "authorization": f"Bearer {self.identity_token}",
+                "authorization": f"Bearer {self.wallet.identity_token}",
             }
 
             utc_time_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"

@@ -28,9 +28,11 @@ class NeuraVerse:
 
         self.privy = PrivyAuth(client=client, wallet=self.wallet)
 
-        self.headers = {**DEFAULT_HEADERS, "authorization": f"Bearer {self.privy.identity_token}"}
-
         self.settings = Settings()
+
+    @property
+    def headers(self) -> dict:
+        return {**DEFAULT_HEADERS, "authorization": f"Bearer {self.wallet.identity_token}"}
 
     async def get_account_info(self) -> dict:
         if not self.privy.authentication:
@@ -267,7 +269,7 @@ class NeuraVerse:
 
             logger.debug(f"{self.wallet} | Faucet POST cookies keys: {list(cookie.keys())}")
 
-            data = '["' + self.client.account.address + '",267,"' + self.privy.identity_token + '",true]'
+            data = '["' + self.client.account.address + '",267,"' + self.wallet.identity_token + '",true]'
 
             response = await self.session.post(
                 url="https://neuraverse.neuraprotocol.io/",
@@ -284,11 +286,11 @@ class NeuraVerse:
                 raise RuntimeError(f"Non-200 response ({response.status_code})")
 
             if "Insufficient neuraPoints." in response.text:
-                logger.error(f"[{self.wallet}] | Insufficient neuraPoints.")
+                logger.error(f"{self.wallet} | Insufficient neuraPoints.")
                 return False
 
             elif "Faucet queue full" in response.text:
-                logger.error(f"[{self.wallet}] | Faucet queue full, please retry in a minute.")
+                logger.error(f"{self.wallet} | Faucet queue full, please retry in a minute.")
                 return False
 
             elif "Address has already received" in response.text:
@@ -296,7 +298,7 @@ class NeuraVerse:
                 return False
 
             elif "ANKR distribution successful" in response.text:
-                logger.success(f"[{self.wallet}] | Faucet claimed successfully")
+                logger.success(f"{self.wallet} | Faucet claimed successfully")
 
                 ts_ms = int(time.time() * 1000)
                 faucet_last_claim = json.dumps({"timestamp": ts_ms}, separators=(",", ":"))
@@ -320,7 +322,7 @@ class NeuraVerse:
 
             event_headers = {
                 "accept": "application/json, text/plain, */*",
-                "authorization": f"Bearer {self.privy.identity_token}",
+                "authorization": f"Bearer {self.wallet.identity_token}",
                 "content-type": "application/json",
                 "origin": "https://neuraverse.neuraprotocol.io",
                 "referer": "https://neuraverse.neuraprotocol.io/",

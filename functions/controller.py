@@ -35,6 +35,7 @@ class Controller:
 
     async def build_actions(self) -> list:
         try:
+         
             actions = [ 
                     self.complete_quests,
                     self.execute_zotto_swaps,
@@ -42,9 +43,7 @@ class Controller:
                     self.run_ai_chat_session,
                     self.mint_omnihub_nft 
                     ]
-            
-            logger.info(f"{self.wallet} | Building actions list…")
-            
+                 
             if await self.portal.privy.privy_authorize():
                 
                 account_info = await self.portal.get_account_info()
@@ -435,10 +434,10 @@ class Controller:
 
             attempts = 0
             completed = 0
-            max_attempts = limit * 3
+            max_fail_attempts = limit * 3
             
             logger.info(f"{self.wallet} | AI chat session start (limit={limit})")
-            while completed < limit and attempts < max_attempts:
+            while completed < limit and attempts < max_fail_attempts:
                 
                 validator_id = random.choice(list_validators).get("id", "")
 
@@ -456,8 +455,8 @@ class Controller:
                 message_list = await self.portal.chat(payload=payload, validator_id=validator_id)
 
                 if message_list:
-                    attempts += 1
                     completed += 1
+                    attempts = 0
                     logger.success(f"{self.wallet} | AI chat response received from validator {validator_id}: {message_list}")
                 else:
                     attempts += 1
@@ -465,7 +464,7 @@ class Controller:
 
                 if completed < limit:
                     random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
-                    logger.success(f"{self.wallet} | Next AI message in {random_sleep}s")
+                    logger.info(f"{self.wallet} | Next AI message in {random_sleep}s")
                     await asyncio.sleep(random_sleep)
                     
             logger.success(f"{self.wallet} | AI chat session finished: {completed}/{limit}") 
@@ -499,11 +498,11 @@ class Controller:
 
                 attempts = 0
                 completed = 0
-                max_attempts = total_bridge * 3
+                max_fail_attempts = total_bridge * 3
                 
                 logger.info(f"{self.wallet} | Auto‑bridge session started: total={total_bridge}")
 
-                while completed < total_bridge and attempts < max_attempts:
+                while completed < total_bridge and attempts < max_fail_attempts:
                     direction = random.choice(directions)
 
                     if direction == "neura_to_sepolia":
@@ -511,6 +510,7 @@ class Controller:
                         attempts += 1
                         
                         if sucsess:
+                            attempts = 0
                             await self.claim_pending_sepolia_bridges()
                             
                         else:
@@ -520,6 +520,8 @@ class Controller:
 
                             if not sucsess:
                                 continue
+                            else:
+                                attempts = 0
                             
                         completed += 1
 
@@ -534,9 +536,12 @@ class Controller:
                             attempts += 1
                             
                             if sucsess:
+                                attempts = 0
                                 await self.claim_pending_sepolia_bridges()
                             else:
                                 continue
+                        else:
+                            attempts = 0
                             
                         completed += 1
                 
@@ -642,16 +647,16 @@ class Controller:
 
             total_swaps = random.randint(self.settings.swaps_count_min, self.settings.swaps_count_max)
 
-            attempts = 0
+            attempts = 0 
             completed = 0
-            max_attempts = total_swaps * 3
+            max_fail_attempts = total_swaps * 3
 
             logger.info(f"{self.wallet} | Zotto swaps: total={total_swaps}")
             
             all_token_balances = await self.zotto._current_balances(tokens_list)
             logger.debug(f"{self.wallet} | DEBUG: after _current_balances → {len(all_token_balances)} balances received")
             
-            while completed < total_swaps and attempts < max_attempts:
+            while completed < total_swaps and attempts < max_fail_attempts:
                 
                 logger.debug(f"{self.wallet} | DEBUG: loop heartbeat → completed={completed}, attempts={attempts}, total={total_swaps}")
 
@@ -673,7 +678,7 @@ class Controller:
                         
                         logger.warning(f"{self.wallet} | Native balance low: {native_balance.Ether} ETH (min required: {min_native_balace} ANRK)")
 
-                        while native_balance.Ether < min_native_balace and attempts < max_attempts:
+                        while native_balance.Ether < min_native_balace and attempts < max_fail_attempts:
                             spendables = [token for token in candidates_with_balance if token.address != Contracts.ANKR.address]
 
                             if not spendables:
@@ -695,23 +700,38 @@ class Controller:
                             
                             logger.info(f"{self.wallet} | Restoring native balance: swapping {swap_amount.Ether} {from_token.title} → ANKR")
                             
-                            ok = await self.zotto.execute_swap(from_token=from_token, to_token=Contracts.ANKR, amount=swap_amount, max_gas_price=max_gas_price)
+                            ok = await self.zotto.execute_swap(
+                                from_token=from_token,
+                                to_token=Contracts.ANKR,
+                                amount=swap_amount,
+                                max_gas_price=max_gas_price,
+                            )
                             
-                            attempts += 1
-                            random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
+                            random_sleep = random.randint(
+                                self.settings.random_pause_between_actions_min,
+                                self.settings.random_pause_between_actions_max,
+                            )
                             
                             if ok:
                                 completed += 1
-                                logger.success(f"{self.wallet} | Native balance restored: swapped {swap_amount.Ether} {from_token.title} → ANKR ({completed}/{total_swaps}). Next action in {random_sleep}s")
+                                attempts = 0
+                                logger.success(
+                                    f"{self.wallet} | Native balance restored: swapped {swap_amount.Ether} {from_token.title} → ANKR "
+                                    f"({completed}/{total_swaps}). Next action in {random_sleep}s"
+                                )
                                 await asyncio.sleep(random_sleep)
                                 
                                 native_balance = await self.client.wallet.balance()
                                 all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
-                                all_token_balances[Contracts.ANKR.address] = await self.client.wallet.balance()                     
+                                all_token_balances[Contracts.ANKR.address] = await self.client.wallet.balance()
                                 if from_token in candidates_with_balance:
                                     candidates_with_balance.remove(from_token)
-                            else:                             
-                                logger.error(f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether} {from_token.title} → ANKR failed. Next action in {random_sleep}s")
+                            else:
+                                attempts += 1
+                                logger.error(
+                                    f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether} {from_token.title} → ANKR failed. "
+                                    f"Next action in {random_sleep}s"
+                                )
                                 await asyncio.sleep(random_sleep)
                                 continue
                         continue
@@ -739,20 +759,36 @@ class Controller:
                         
                         logger.info(f"{self.wallet} | Swapping {swap_amount.Ether} {from_token.title} → {to_token.title}")
                         
-                        ok = await self.zotto.execute_swap(from_token=from_token, to_token=to_token, amount=swap_amount, tokens_price=tokens_price, max_gas_price=max_gas_price)
+                        ok = await self.zotto.execute_swap(
+                            from_token=from_token,
+                            to_token=to_token,
+                            amount=swap_amount,
+                            tokens_price=tokens_price,
+                            max_gas_price=max_gas_price,
+                        )
                         logger.debug(f"{self.wallet} | DEBUG: after execute_swap (normal) ok={ok}")
-                        attempts += 1
                         
-                        random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
+                        random_sleep = random.randint(
+                            self.settings.random_pause_between_actions_min,
+                            self.settings.random_pause_between_actions_max,
+                        )
                         
                         if ok:
+                            attempts = 0
                             all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
                             all_token_balances[to_token.address] = await self.client.wallet.balance(to_token)
-                            logger.success(f"{self.wallet} | Swap successful: {swap_amount.Ether} {from_token.title} → {to_token.title}. Next action in {random_sleep}s")
+                            logger.success(
+                                f"{self.wallet} | Swap successful: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
+                                f"Next action in {random_sleep}s"
+                            )
                             completed += 1
                             await asyncio.sleep(random_sleep)
                         else:
-                            logger.error(f"{self.wallet} | Swap failed: {swap_amount.Ether} {from_token.title} → {to_token.title}. Next action in {random_sleep}s")
+                            attempts += 1
+                            logger.error(
+                                f"{self.wallet} | Swap failed: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
+                                f"Next action in {random_sleep}s"
+                            )
                             await asyncio.sleep(random_sleep)
 
                 except Exception as e:
