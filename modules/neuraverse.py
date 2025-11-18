@@ -13,6 +13,7 @@ from data.settings import Settings
 from libs.eth_async.client import Client
 from modules.privy_authentication import PrivyAuth
 from utils.browser import Browser
+from utils.captcha.captcha_handler import CaptchaHandler
 from utils.db_api.models import Wallet
 from utils.db_api.wallet_api import update_wallet_info
 from utils.twitter.twitter_client import TwitterOauthData
@@ -263,7 +264,30 @@ class NeuraVerse:
 
             logger.debug(f"{self.wallet} | Faucet POST cookies keys: {list(cookie.keys())}")
 
-            data = '["' + self.client.account.address + '",267,"' + self.wallet.identity_token + '",true]'
+            captcha_handler = CaptchaHandler(wallet=self.wallet)
+            captcha_raw = await captcha_handler.cloudflare_token(
+                websiteURL="https://neuraverse.neuraprotocol.io/?section=faucet",
+                websiteKey="0x4AAAAAACAe7c3f7wATdkJe",
+            )
+
+            if isinstance(captcha_raw, dict):
+                captcha_token = captcha_raw.get("token")
+            else:
+                captcha_token = captcha_raw
+
+            if not captcha_token:
+                raise ValueError("Сaptcha token missing")
+
+            data = json.dumps(
+                [
+                    self.client.account.address,
+                    267,
+                    self.wallet.identity_token,
+                    True,
+                    captcha_token,
+                ],
+                separators=(",", ":"),
+            )
 
             response = await self.session.post(
                 url="https://neuraverse.neuraprotocol.io/",
