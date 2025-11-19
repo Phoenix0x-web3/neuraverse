@@ -3,14 +3,15 @@ import time
 import json
 import math
 import random
+
+from loguru import logger
+
 from libs.eth_async.client import Client
 from modules.neuraverse import NeuraVerse
 from utils.db_api.models import Wallet
 from utils.twitter.twitter_client import TwitterClient
-from utils.discord.discord import DiscordOAuth
-from loguru import logger
+from utils.discord.discord import DiscordOAuth, DiscordStatus
 from data.settings import Settings
-
 from collections import Counter
 from modules.bridge import Bridge
 from libs.eth_async.data.models import Networks
@@ -20,8 +21,6 @@ from libs.eth_async.utils.utils import randfloat
 from data.models import Contracts
 from libs.eth_async.data.models import TokenAmount
 from utils.db_api.wallet_api import update_wallet_info
-
-
 
 
 class Controller:
@@ -36,15 +35,7 @@ class Controller:
 
     async def build_actions(self) -> list:
         try:
-         
-            actions = [ 
-                    self.complete_quests,
-                    self.execute_zotto_swaps,
-                    self.execute_auto_bridge,
-                    self.run_ai_chat_session,
-                    self.mint_omnihub_nft,
-                    self.connect_socials, 
-                    ]
+            actions = []
                  
             if await self.portal.privy.privy_authorize():
                 
@@ -53,44 +44,59 @@ class Controller:
                 
                 if points == 0:
                     await self.complete_quests()
+                else:
+                    actions.append(self.complete_quests)
                     
-                    if self.complete_quests in actions:
-                        actions.remove(self.complete_quests)
-                
-                
                 faucet_last_claim = self.wallet.faucet_last_claim
-                can_use_faucet = False
-
-                if faucet_last_claim:
+                
+                if not faucet_last_claim:
+                    can_use_faucet = True
+                else:
                     try:
                         data = json.loads(faucet_last_claim)
                         last_ts = int(data.get("timestamp", 0))
                         now_ms = int(time.time() * 1000)
-                        elapsed_ms = now_ms - last_ts
-                        
-                        if elapsed_ms >= 86_400_000:
-                            can_use_faucet = True
-                        else:
-                            remaining_hours = round((86_400_000 - elapsed_ms) / 1000 / 60 / 60, 2)
-                            logger.debug(f"{self.wallet} | Faucet cooldown active, remaining ~{remaining_hours}h")
+                        can_use_faucet = (now_ms - last_ts) >= 86_400_000
                     except Exception as e:
-                        logger.error(f"{self.wallet} | Failed to parse faucet_last_claim='{faucet_last_claim}': {e}")
+                        logger.error(
+                            f"{self.wallet} | Failed to parse faucet_last_claim='{faucet_last_claim}': {e}"
+                        )
                         can_use_faucet = True
-                else:
-                    can_use_faucet = True
 
                 if can_use_faucet:
-                    logger.debug(f"{self.wallet} | Faucet is available — adding faucet to actions list")
                     actions.append(self.faucet)
-        
+
                 wallet_balance = await self.client.wallet.balance()
                 
-                if wallet_balance.Ether <= self.settings.min_native_balance:
-                    logger.warning(f"{self.wallet} | Native balance {wallet_balance.Ether} ETH ≤ minimum {self.settings.min_native_balance} ETH — disabling swaps, bridge")
-                    actions.remove(self.execute_zotto_swaps)
-                    actions.remove(self.execute_auto_bridge)
-                    actions.remove(self.mint_omnihub_nft)
+                if wallet_balance.Ether > self.settings.min_native_balance:
+                
+                    total_swaps = random.randint(self.settings.swaps_count_min, self.settings.swaps_count_max)
+                    total_bridge = random.randint(self.settings.bridge_count_min, self.settings.bridge_count_max)
                     
+                
+                    if total_swaps:
+                        async def do_swaps():
+                            return await self.execute_zotto_swaps(total_swaps=total_swaps)
+                        actions.append(do_swaps)
+
+                    if total_bridge:
+                        async def do_bridge():
+                            return await self.execute_auto_bridge(total_bridge=total_bridge)
+                        actions.append(do_bridge)
+
+                    if await self.omnihub.is_minting():
+                        if self.settings.omnihub_repeat_if_already_minted:
+                            actions.append(self.mint_omnihub_nft)
+                    else:
+                        actions.append(self.mint_omnihub_nft)
+                        
+                total_ai_chat = random.randint(self.settings.ai_chat_count_min, self.settings.ai_chat_count_max)
+                
+                if total_ai_chat:
+                        async def do_ai_chat():
+                            return await self.run_ai_chat_session(total_ai_chat=total_ai_chat)
+                        actions.append(do_ai_chat)
+
                 random.shuffle(actions)
                 return actions
             else:
@@ -194,6 +200,7 @@ class Controller:
         
                         if type == 'discord':
                             logger.success(f"{self.wallet} | Discord successfully connected")
+                            self.wallet.discord_status = DiscordStatus.ok
                             return True
                         
             logger.error(f"{self.wallet} | Failed to connect Discord")
@@ -260,7 +267,7 @@ class Controller:
                 f"{self.wallet} | Quests overview: claimable={claimable_quests}, not_completed={not_completed_quests}, total={len(all_quests)}"
             )
 
-            SUPPORTED_QUESTS = [
+            supported_quest = [
                 "daily_login",
                 "collect_all_pulses",
                 "visit_all_map",
@@ -281,8 +288,8 @@ class Controller:
                 
                 try:
                     if quest_status == "notCompleted":
-                        if quest_id not in SUPPORTED_QUESTS:
-                            logger.warning(f"{self.wallet} | Unsupported quest skipped: {quest_name}")
+                        if quest_id not in supported_quest:
+                            logger.debug(f"{self.wallet} | Unsupported quest skipped: {quest_name}")
                             continue
 
                         logger.info(f"{self.wallet} | Running quest: {quest_name} ({quest_points} pts)")
@@ -337,10 +344,10 @@ class Controller:
                     continue
 
             logger.info(
-                f"{self.wallet} | Quest results — claimed: {total_quest_claimed}, completed: {total_quest_completed}, "
-                f"claim errors: {total_claim_errors}, complete errors: {total_complete_errors}"
+                f"{self.wallet} | Quests summary: claimed={total_quest_claimed}, completed={total_quest_completed}, "
+                f"claim_failures={total_claim_errors}, complete_failures={total_complete_errors}"
             )
-
+            
             return True
         
         except Exception as e:
@@ -459,9 +466,14 @@ class Controller:
             logger.error(f"{self.wallet} | Error — {e}")
             return False
 
-    async def run_ai_chat_session(self) -> bool:
+    async def run_ai_chat_session(self, total_ai_chat: int) -> bool:
 
         try: 
+            
+            if not total_ai_chat:
+                logger.warning(f"{self.wallet} | total_ai_chat is 0 — configure ai_chat_count_min/max in settings.yaml")
+                return False
+            
             list_validators = await self.portal.get_validators()
 
             if not list_validators:
@@ -474,17 +486,12 @@ class Controller:
                 logger.error(f"{self.wallet} | No AI messages configured")
                 return False
 
-            limit = random.randint(self.settings.ai_chat_count_min, self.settings.ai_chat_count_max)
-            
-            if limit == 0:
-                return True
-
             attempts = 0
             completed = 0
-            max_fail_attempts = limit * 3
+            max_fail_attempts = total_ai_chat * 3
             
-            logger.info(f"{self.wallet} | AI chat session start (limit={limit})")
-            while completed < limit and attempts < max_fail_attempts:
+            logger.info(f"{self.wallet} | AI chat session start (total={total_ai_chat})")
+            while completed < total_ai_chat and attempts < max_fail_attempts:
                 
                 validator_id = random.choice(list_validators).get("id", "")
 
@@ -509,25 +516,29 @@ class Controller:
                     attempts += 1
                     logger.error(f"{self.wallet} | AI chat failed for validator {validator_id}")
 
-                if completed < limit:
+                if completed < total_ai_chat:
                     random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
                     logger.info(f"{self.wallet} | Next AI message in {random_sleep}s")
                     await asyncio.sleep(random_sleep)
                     
-            logger.info(f"{self.wallet} | AI chat session finished: {completed}/{limit}") 
+            logger.info(f"{self.wallet} | AI chat session finished: {completed}/{total_ai_chat}") 
             return True
                     
         except Exception as e:
             logger.error(f"{self.wallet} | Error — {e}")
             return False
                             
-    async def execute_auto_bridge(self, bridge_all_to_neura: bool = False) -> bool:
+    async def execute_auto_bridge(self, total_bridge: int, bridge_all_to_neura: bool = False) -> bool:
         try:
+            
+            if not total_bridge:
+                logger.warning(f"{self.wallet} | total_bridge is 0 — configure bridge_count_min/max in settings.yaml")
+                return False
             
             if bridge_all_to_neura:
                 logger.info(f"{self.wallet} | Starting full Sepolia → Neura bridge...")
                 await self.portal.visit_location("bridge:visit")
-                sucsess = await self.bridge._bridge_sepolia_to_neura_all()
+                sucsess = await self.bridge.bridge_sepolia_to_neura_all()
                 
                 if sucsess:
                     return True
@@ -535,11 +546,6 @@ class Controller:
                     return False
                            
             else:
-                total_bridge = random.randint(self.settings.bridge_count_min, self.settings.bridge_count_max)
-                
-                if total_bridge == 0:
-                    return True
-
                 await self.portal.visit_location("bridge:visit")
                 
                 directions = ["neura_to_sepolia", "sepolia_to_neura"]
@@ -554,7 +560,7 @@ class Controller:
                     direction = random.choice(directions)
 
                     if direction == "neura_to_sepolia":
-                        sucsess = await self.bridge._bridge_neura_to_sepolia_percent()
+                        sucsess = await self.bridge.bridge_neura_to_sepolia_percent()
                         attempts += 1
                         
                         if sucsess:
@@ -563,7 +569,7 @@ class Controller:
                             
                         else:
                             logger.warning(f"{self.wallet} | Neura balance too low, trying Sepolia → Neura instead")
-                            sucsess = await self.bridge._bridge_sepolia_to_neura_percent()
+                            sucsess = await self.bridge.bridge_sepolia_to_neura_percent()
                             attempts += 1
 
                             if not sucsess:
@@ -575,12 +581,12 @@ class Controller:
 
                     else:
                         
-                        sucsess = await self.bridge._bridge_sepolia_to_neura_percent()
+                        sucsess = await self.bridge.bridge_sepolia_to_neura_percent()
                         attempts += 1
                         
                         if not sucsess:
                             logger.warning(f"{self.wallet} | Sepolia balance too low, trying Neura → Sepolia instead")
-                            sucsess = await self.bridge._bridge_neura_to_sepolia_percent()
+                            sucsess = await self.bridge.bridge_neura_to_sepolia_percent()
                             attempts += 1
                             
                             if sucsess:
@@ -679,31 +685,29 @@ class Controller:
             logger.error(f"{self.wallet} | Error — {e}")
             return False
         
-    async def execute_zotto_swaps(self) -> bool:
-        try:    
+    async def execute_zotto_swaps(self, total_swaps: int) -> bool:
+        try: 
+               
+            if not total_swaps:
+                logger.warning(f"{self.wallet} | total_swaps is 0 — configure swaps_count_min/max in settings.yaml")
+                return False
             
-            logger.info(f"{self.wallet} | Starting Zotto auto-swap cycle…")
             
             tokens_list = await self.zotto.get_available_token_contracts()
-            random.shuffle(tokens_list)
-
+            
             if not tokens_list or len(tokens_list) < 2:
                 logger.error(f"{self.wallet} | Not enough tokens available")
                 return False
-
-            total_swaps = random.randint(self.settings.swaps_count_min, self.settings.swaps_count_max)
             
-            if total_swaps == 0:
-                return True
-
+            random.shuffle(tokens_list)
+            
             attempts = 0 
             completed = 0
             max_fail_attempts = total_swaps * 3
 
-            logger.info(f"{self.wallet} | Zotto swaps: total={total_swaps}")
+            logger.info(f"{self.wallet} | Starting Zotto auto-swap: total={total_swaps}")
             
-            all_token_balances = await self.zotto._current_balances(tokens_list)
-            logger.debug(f"{self.wallet} | DEBUG: after _current_balances → {len(all_token_balances)} balances received")
+            all_token_balances = await self.zotto.current_balances(tokens_list)
             
             while completed < total_swaps and attempts < max_fail_attempts:
                 
@@ -718,16 +722,15 @@ class Controller:
                     break
 
                 native_balance = await self.client.wallet.balance()
-                logger.debug(f"{self.wallet} | DEBUG: after wallet.balance → {native_balance.Ether} ETH")
                 min_native_balace = self.settings.min_native_balance
-                max_gas_price = self.settings.max_gas_price
 
                 try:
                     if native_balance.Ether < min_native_balace:
                         
-                        logger.warning(f"{self.wallet} | Native balance low: {native_balance.Ether} ETH (min required: {min_native_balace} ANRK)")
+                        logger.warning(f"{self.wallet} | Native balance low: {native_balance.Ether} ANRK (min required: {min_native_balace} ANRK)")
 
                         while native_balance.Ether < min_native_balace and attempts < max_fail_attempts:
+                            
                             spendables = [token for token in candidates_with_balance if token.address != Contracts.ANKR.address]
 
                             if not spendables:
@@ -753,7 +756,6 @@ class Controller:
                                 from_token=from_token,
                                 to_token=Contracts.ANKR,
                                 amount=swap_amount,
-                                max_gas_price=max_gas_price,
                             )
                             
                             random_sleep = random.randint(
@@ -762,6 +764,7 @@ class Controller:
                             )
                             
                             if ok:
+                                
                                 completed += 1
                                 attempts = 0
                                 logger.success(
@@ -773,9 +776,11 @@ class Controller:
                                 native_balance = await self.client.wallet.balance()
                                 all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
                                 all_token_balances[Contracts.ANKR.address] = await self.client.wallet.balance()
+                                
                                 if from_token in candidates_with_balance:
                                     candidates_with_balance.remove(from_token)
                             else:
+                                
                                 attempts += 1
                                 logger.error(
                                     f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether} {from_token.title} → ANKR failed. "
@@ -786,8 +791,8 @@ class Controller:
                             
                         if native_balance.Ether < min_native_balace:
                             break
-                        
-                        continue
+                        else:
+                            continue
 
                     else:
                         
@@ -817,9 +822,8 @@ class Controller:
                             to_token=to_token,
                             amount=swap_amount,
                             tokens_price=tokens_price,
-                            max_gas_price=max_gas_price,
                         )
-                        logger.debug(f"{self.wallet} | DEBUG: after execute_swap (normal) ok={ok}")
+                        
                         
                         random_sleep = random.randint(
                             self.settings.random_pause_between_actions_min,
@@ -827,6 +831,7 @@ class Controller:
                         )
                         
                         if ok:
+                            
                             attempts = 0
                             all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
                             all_token_balances[to_token.address] = await self.client.wallet.balance(to_token)
@@ -836,7 +841,9 @@ class Controller:
                             )
                             completed += 1
                             await asyncio.sleep(random_sleep)
+                            
                         else:
+                            
                             attempts += 1
                             logger.error(
                                 f"{self.wallet} | Swap failed: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
@@ -857,13 +864,7 @@ class Controller:
             return False
     
     async def mint_omnihub_nft(self) -> bool:
-        
-        try: 
-            is_minting = self.omnihub.is_minting
-            
-            if not self.settings.omnihub_repeat_if_already_minted and is_minting:
-                return True
-                
+        try:     
             logger.info(f"{self.wallet} | Starting Omnihub NFT mint process…")
             
             quantity = random.randint(self.settings.omnihub_nft_mint_count_per_transaction_min, self.settings.omnihub_nft_mint_count_per_transaction_max)

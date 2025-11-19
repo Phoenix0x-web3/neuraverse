@@ -213,7 +213,8 @@ async def ai_talk(wallet):
     controller = Controller(client=client, wallet=wallet)
 
     try:
-        await controller.run_ai_chat_session()
+        total_ai_chat = random.randint(Settings().ai_chat_count_min, Settings().ai_chat_count_max)
+        await controller.run_ai_chat_session(total_ai_chat=total_ai_chat)
     except Exception as e:
         logger.error(f"Error — {e}")
 
@@ -225,7 +226,8 @@ async def swaps(wallet):
     controller = Controller(client=client, wallet=wallet)
 
     try:
-        await controller.execute_zotto_swaps()
+        total_swaps = random.randint(Settings().swaps_count_min, Settings().swaps_count_max)
+        await controller.execute_zotto_swaps(total_swaps=total_swaps)
     except Exception as e:
         logger.error(f"Error — {e}")
 
@@ -238,7 +240,8 @@ async def bridge(wallet):
     controller = Controller(client=client, wallet=wallet, client_sepolia=client_sepolia)
 
     try:
-        await controller.execute_auto_bridge()
+        total_bridge = random.randint(Settings().bridge_count_min, Settings().bridge_count_max)
+        await controller.execute_auto_bridge(total_bridge=total_bridge)
     except Exception as e:
         logger.error(f"Error — {e}")
 
@@ -251,6 +254,6 @@ async def bridge_all_to_neura(wallet):
     controller = Controller(client=client, wallet=wallet, client_sepolia=client_sepolia)
 
     try:
-        await controller.execute_auto_bridge(bridge_all_to_neura=True)
+        await controller.execute_auto_bridge(bridge_all_to_neura=True, total_bridge=1)
     except Exception as e:
         logger.error(f"Error — {e}")

@@ -12,6 +12,7 @@ from data.models import Contracts
 from libs.base import Base
 from libs.eth_async.client import Client
 from libs.eth_async.data.models import DefaultABIs, RawContract, TokenAmount, TxArgs
+from libs.eth_async.utils.utils import wait_for_acceptable_gas_price
 from utils.browser import Browser
 from utils.db_api.models import Wallet
 
@@ -24,6 +25,9 @@ class ZottoSwap(Base):
         self.wallet = wallet
         self.session = Browser()
         self.headers = DEFAULT_HEADERS
+
+    def __repr__(self):
+        return f"{self.__module__} | [{self.wallet.address}]"
 
     async def get_all_tokens_info(self) -> list:
         try:
@@ -43,7 +47,7 @@ class ZottoSwap(Base):
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return []
 
             all_tokens_info = response.json()["data"]["tokens"]
 
@@ -56,7 +60,7 @@ class ZottoSwap(Base):
 
         except Exception as e:
             logger.error(f"{self.wallet} | Error — {e}")
-            raise
+            return []
 
     async def get_available_token_contracts(self) -> list[RawContract]:
         try:
@@ -113,7 +117,7 @@ class ZottoSwap(Base):
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return []
 
             all_pools = response.json()["data"]["pools"]
 
@@ -187,9 +191,9 @@ class ZottoSwap(Base):
         amount: TokenAmount,
         from_token: RawContract,
         to_token: RawContract,
-        max_gas_price: int,
         tokens_price: dict | None = None,
-        slippage: float = 15.0,
+        slippage: float = 10.0,
+        check_gas_price: bool = True,
     ) -> bool:
         try:
             logger.debug(f"{self.wallet} | DEBUG: execute_swap START — amount={amount.Ether}, from={from_token.title}, to={to_token.title}")
@@ -197,31 +201,8 @@ class ZottoSwap(Base):
             if amount.Wei <= 0:
                 raise ValueError(f"Invalid amount: {amount.Wei}")
 
-            if max_gas_price:
-                gas_price = await self.client.transactions.gas_price()
-                logger.debug(f"{self.wallet} | DEBUG: initial gas price — {gas_price.Gwei} gwei")
-
-                if gas_price.Gwei > max_gas_price:
-                    logger.warning(f"{self.wallet} | High gas price detected: {gas_price.Gwei} gwei")
-
-                    wait_start = time.time()
-                    while gas_price.Gwei > max_gas_price:
-                        elapsed = time.time() - wait_start
-                        if elapsed >= 120:
-                            logger.warning(
-                                f"{self.wallet} | Gas did not drop below {max_gas_price} gwei within 120s "
-                                f"(last observed {gas_price.Gwei} gwei) — aborting swap"
-                            )
-                            return False
-                        sleep = random.randint(20, 60)
-                        logger.debug(f"{self.wallet} | DEBUG: gas still high ({gas_price.Gwei} gwei), sleeping {sleep}s (elapsed {int(elapsed)}s)")
-                        await asyncio.sleep(sleep)
-                        gas_price = await self.client.transactions.gas_price()
-                        logger.debug(f"{self.wallet} | DEBUG: refreshed gas price — {gas_price.Gwei} gwei")
-
-                    logger.info(f"{self.wallet} | Gas normalized below threshold: {gas_price.Gwei} gwei — continuing execution")
-                else:
-                    logger.debug(f"{self.wallet} | DEBUG: gas price acceptable — {gas_price.Gwei} gwei")
+            if check_gas_price and not await wait_for_acceptable_gas_price(client=self.client, wallet=self.wallet):
+                return False
 
             swap_from_native = from_token.address.lower() == Contracts.ANKR.address.lower()
 
@@ -242,94 +223,39 @@ class ZottoSwap(Base):
                     return False
 
             deadline_ms = int(time.time() * 1000) + (30 * 60 * 1000)
-
             recipient_address = "0x0000000000000000000000000000000000000000" if swap_from_native else self.client.account.address
-
             contract = await self.client.contracts.get(Contracts.ZOTTO_ROUTER_ADDRESS)
             tx_value = amount.Wei if swap_from_native else 0
-
-            if not tokens_price:
-                amount_out_min = TokenAmount(
-                    amount=0,
-                    decimals=18
-                    if from_token.address == Contracts.ANKR.address
-                    else await self.client.transactions.get_decimals(contract=to_token.address),
-                )
-
-                inner = self._encode_swap_params(
-                    from_token=from_token,
-                    to_token=to_token,
-                    recipient_address=recipient_address,
-                    deadline_ms=deadline_ms,
-                    amount=amount,
-                    amount_out_min=amount_out_min,
-                )
-
-                calls = [bytes.fromhex(inner[2:])]
-
-                if not swap_from_native:
-                    unwrap_params = abi_encode(["uint256", "address"], [0, self.client.account.address])
-                    unwrap_call = bytes.fromhex("69bc35b2" + unwrap_params.hex())
-                    calls.append(unwrap_call)
-
-                tx_params = TxArgs(data=calls).tuple()
-                data = contract.encode_abi("multicall", args=tx_params)
-
-                try:
-                    transaction = await self.client.transactions.sign_and_send(
-                        TxParams(
-                            to=Contracts.ZOTTO_ROUTER_ADDRESS.address,
-                            data=data,
-                            value=tx_value,
-                        )
-                    )
-                    recipient = await transaction.wait_for_receipt(client=self.client, timeout=300)
-                except Exception as e:
-                    logger.error(f"{self.wallet} | Swap execution failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
-
-                    return False
-
-                if recipient["status"] != 1:
-                    logger.error(f"{self.wallet} | Swap transaction reverted on-chain")
-                    return False
-
-                logger.debug(f"{self.wallet} | Swap executed successfully: {amount.Ether} {from_token.title} → {to_token.title}")
-                return True
-
-            price = Decimal(str(tokens_price[from_token.address.lower()]))
-            amt = Decimal(str(amount.Ether))
 
             decimals_out = (
                 18 if to_token.address == Contracts.ANKR.address else await self.client.transactions.get_decimals(contract=to_token.address)
             )
 
+            use_price = tokens_price is not None
+
+            price = Decimal(0)
+            amt = Decimal(0)
             current_slippage = slippage
             max_slippage = 50.0
             slippage_step = 5.0
             tried_zero_min_out = False
 
-            while True:
-                if tried_zero_min_out:
-                    # Final attempt: amountOutMin = 0
-                    amount_out_min = TokenAmount(
-                        amount=0,
-                        decimals=18
-                        if to_token.address == Contracts.ANKR.address
-                        else await self.client.transactions.get_decimals(contract=to_token.address),
-                    )
-                    logger.debug(f"{self.wallet} | Using amountOutMin=0 for retry swap {amount.Ether} {from_token.title} → {to_token.title}")
-                else:
-                    slip_multiplier = Decimal(str((100 - float(current_slippage)) / 100))
-                    out_amount = float(price * amt * slip_multiplier)
-                    amount_out_min = TokenAmount(
-                        amount=out_amount,
-                        decimals=decimals_out,
-                    )
-                    logger.debug(
-                        f"{self.wallet} | DEBUG: attempt with slippage={current_slippage}%, amount_out_min={amount_out_min.Ether} {to_token.title}"
-                    )
+            if use_price:
+                price = Decimal(str(tokens_price[from_token.address.lower()]))
+                amt = Decimal(str(amount.Ether))
 
-                inner = self._encode_swap_params(
+            while True:
+                if not use_price:
+                    amount_out_min = TokenAmount(amount=0, decimals=decimals_out)
+                else:
+                    if tried_zero_min_out:
+                        amount_out_min = TokenAmount(amount=0, decimals=decimals_out)
+                    else:
+                        slip_multiplier = Decimal(str((100 - float(current_slippage)) / 100))
+                        out_amount = float(price * amt * slip_multiplier)
+                        amount_out_min = TokenAmount(amount=out_amount, decimals=decimals_out)
+
+                inner = self.encode_swap_params(
                     from_token=from_token,
                     to_token=to_token,
                     recipient_address=recipient_address,
@@ -363,28 +289,25 @@ class ZottoSwap(Base):
                     if e.args and isinstance(e.args[0], dict):
                         err_message = str(e.args[0].get("message", ""))
 
-                    if "Too little received" in message or "Too little received" in err_message:
-                        logger.debug(
-                            f"{self.wallet} | Swap reverted with 'Too little received' at slippage={current_slippage}%, "
-                            f"tried_zero_min_out={tried_zero_min_out}"
-                        )
+                    if not use_price:
+                        logger.error(f"{self.wallet} | Swap execution failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
+                        return False
 
+                    elif "Upfront cost exceeds account balance" in message or "Upfront cost exceeds account balance" in err_message:
+                        logger.error(
+                            f"{self.wallet} | Swap failed: upfront cost exceeds account balance for {amount.Ether} {from_token.title} → {to_token.title}"
+                        )
+                        return False
+
+                    elif "Too little received" in message or "Too little received" in err_message:
                         if not tried_zero_min_out and current_slippage < max_slippage:
                             current_slippage += slippage_step
-                            logger.debug(
-                                f"{self.wallet} | Increasing slippage to {current_slippage}% and retrying swap "
-                                f"{amount.Ether} {from_token.title} → {to_token.title}"
-                            )
                             sleep = random.randint(5, 10)
                             await asyncio.sleep(sleep)
                             continue
 
                         if not tried_zero_min_out:
                             tried_zero_min_out = True
-                            logger.debug(
-                                f"{self.wallet} | Max slippage {current_slippage}% reached, retrying with amountOutMin=0 "
-                                f"for {amount.Ether} {from_token.title} → {to_token.title}"
-                            )
                             sleep = random.randint(5, 10)
                             await asyncio.sleep(sleep)
                             continue
@@ -396,31 +319,25 @@ class ZottoSwap(Base):
 
                         return False
 
-                    logger.error(f"{self.wallet} | Swap execution failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
-
-                    return False
+                    else:
+                        logger.error(f"{self.wallet} | Swap execution failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
+                        return False
 
                 except Exception as e:
                     logger.error(f"{self.wallet} | Swap execution failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
-
                     return False
 
                 if recipient["status"] != 1:
                     logger.error(f"{self.wallet} | Swap transaction reverted on-chain")
                     return False
 
-                logger.debug(
-                    f"{self.wallet} | Swap executed successfully: {amount.Ether} {from_token.title} → {to_token.title} "
-                    f"(final slippage={current_slippage}%, amount_out_min={amount_out_min.Ether} {to_token.title})"
-                )
                 return True
 
         except Exception as e:
             logger.error(f"{self.wallet} | Swap execution failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
-
             return False
 
-    def _encode_swap_params(
+    def encode_swap_params(
         self,
         from_token: RawContract,
         to_token: RawContract,
@@ -444,7 +361,7 @@ class ZottoSwap(Base):
         )
         return "0x1679c792" + swap_params.hex()
 
-    async def _current_balances(self, tokens: list) -> dict:
+    async def current_balances(self, tokens: list) -> dict:
         balances = {}
         for token in tokens:
             logger.debug(f"{self.wallet} | DEBUG: checking balance for {token.title} ({token.address})")

@@ -87,8 +87,8 @@ capmonster_api_key: ""
 
 # AI chat interactions to perform per wallet
 ai_chat_count:
-  min: 1
-  max: 2
+  min: 0
+  max: 0
 
 # List of questions that the AI can randomly ask in chat interactions 
 questions_for_ai_list:

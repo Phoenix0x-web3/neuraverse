@@ -9,7 +9,6 @@ from urllib.parse import parse_qs, urlparse
 from loguru import logger
 
 from data.constants import DEFAULT_HEADERS
-from data.settings import Settings
 from libs.eth_async.client import Client
 from modules.privy_authentication import PrivyAuth
 from utils.browser import Browser
@@ -27,10 +26,10 @@ class NeuraVerse:
         self.wallet = wallet
         self.client = client
         self.session = Browser(wallet=wallet)
-
         self.privy = PrivyAuth(client=client, wallet=self.wallet)
 
-        self.settings = Settings()
+    def __repr__(self):
+        return f"{self.__module__} | [{self.wallet.address}]"
 
     @property
     def headers(self) -> dict:
@@ -47,7 +46,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return {}
 
             account_info = response.json()
 
@@ -72,7 +71,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return {}
 
             account_info = response.json()
 
@@ -101,7 +100,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return []
 
             all_quest = response.json().get("tasks", [])
 
@@ -133,7 +132,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
             status = response.json().get("status", None)
 
@@ -170,7 +169,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
             logger.debug(f"{self.wallet} | Pulse collected successfully (id={pulse_id})")
             return True
@@ -198,7 +197,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
             logger.debug(f"{self.wallet} | Location {location_id} visited successfully")
             return True
@@ -221,7 +220,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 JS chunk response in faucet ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
             action_id = None
             js_code = response.text
@@ -301,7 +300,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
             if "Insufficient neuraPoints." in response.text:
                 logger.error(f"{self.wallet} | Insufficient neuraPoints.")
@@ -336,7 +335,7 @@ class NeuraVerse:
             return False
 
         try:
-            logger.info(f"{self.wallet} | Sending faucet event POST to {self.BASE_URL}/events")
+            logger.info(f"{self.wallet} | Sending faucet event")
 
             event_response = await self.session.post(
                 url=f"{self.BASE_URL}/events", cookies=self.privy.cookies, headers=self.headers, json={"type": "faucet:claimTokens"}
@@ -368,7 +367,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return []
 
             all_validator_info = response.json().get("validators", [])
 
@@ -394,7 +393,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return []
 
             messages_all = response.json().get("messages", [])
 
@@ -425,7 +424,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return []
 
             transactions = response.json().get("transactions", [])
 
@@ -475,7 +474,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | OAuth init failed ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"OAuth init failed ({response.status_code})")
+                return ()
 
             data = response.json()
             auth_url = data.get("url")
@@ -511,7 +510,7 @@ class NeuraVerse:
 
             if response.status_code != 307:
                 logger.error(f"{self.wallet} | OAuth init failed ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"OAuth init failed ({response.status_code})")
+                return False
 
             location = response.headers.get("location")
 
@@ -557,7 +556,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | OAuth init failed ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"OAuth init failed ({response.status_code})")
+                return False
 
         except Exception as e:
             logger.error(f"{self.wallet} | Error — {e}")
@@ -623,7 +622,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | OAuth init failed ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"OAuth init failed ({response.status_code})")
+                return ()
 
             data = response.json()
             auth_url = data.get("url")
@@ -658,7 +657,7 @@ class NeuraVerse:
 
             if response.status_code != 307:
                 logger.error(f"{self.wallet} | OAuth init failed ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"OAuth init failed ({response.status_code})")
+                return False
 
             location = response.headers.get("location")
 
@@ -704,7 +703,7 @@ class NeuraVerse:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | OAuth init failed ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"OAuth init failed ({response.status_code})")
+                return False
 
         except Exception as e:
             logger.error(f"{self.wallet} | Error — {e}")

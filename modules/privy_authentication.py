@@ -24,7 +24,7 @@ class PrivyAuth:
         self.wallet = wallet
         self.session = Browser()
         self.authentication = False
-        self.token_id = self._resolve_privy_ca_id()
+        self.token_id = self.resolve_privy_ca_id()
 
         self.headers = {
             **DEFAULT_HEADERS,
@@ -88,7 +88,7 @@ class PrivyAuth:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
         except Exception as e:
             logger.error(f"{self.wallet} | Request failed — {e}")
@@ -99,7 +99,7 @@ class PrivyAuth:
             identity_token = response.json().get("identity_token")
 
             raw_set_cookie = response.headers.get("set-cookie")
-            cookie_header = self._extract_privy_tokens(raw_set_cookie)
+            cookie_header = self.extract_privy_tokens(raw_set_cookie)
 
             if not (session_token and identity_token and cookie_header):
                 logger.error(
@@ -135,7 +135,7 @@ class PrivyAuth:
             logger.error(f"{self.wallet} | Failed to obtain nonce — {e}")
             return False
 
-        message = self._siwe_message(nonce=nonce)
+        message = self.siwe_message(nonce=nonce)
         signature = self.client.account.sign_message(signable_message=encode_defunct(text=message))
 
         payload = {
@@ -152,13 +152,13 @@ class PrivyAuth:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
             session_token = response.json().get("token")
             identity_token = response.json().get("identity_token")
 
             raw_set_cookie = response.headers.get("set-cookie")
-            cookie_header = self._extract_privy_tokens(raw_set_cookie)
+            cookie_header = self.extract_privy_tokens(raw_set_cookie)
 
             if not (session_token and identity_token and cookie_header):
                 logger.error(
@@ -222,7 +222,7 @@ class PrivyAuth:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return ""
 
             nonce = response.json().get("nonce")
 
@@ -273,7 +273,7 @@ class PrivyAuth:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
         except Exception as e:
             logger.error(f"{self.wallet} | Analytics event processing failed — {e}")
@@ -299,7 +299,7 @@ class PrivyAuth:
 
             if response.status_code != 200:
                 logger.error(f"{self.wallet} | Non-200 response ({response.status_code}). Body: {response.text}")
-                raise RuntimeError(f"Non-200 response ({response.status_code})")
+                return False
 
         except Exception as e:
             logger.error(f"{self.wallet} | Analytics event processing failed — {e}")
@@ -307,7 +307,7 @@ class PrivyAuth:
 
         return True
 
-    def _siwe_message(self, nonce: str) -> str:
+    def siwe_message(self, nonce: str) -> str:
         issued_at = datetime.utcnow().isoformat() + "Z"
 
         return (
@@ -324,14 +324,14 @@ class PrivyAuth:
             "- https://privy.io"
         )
 
-    def _resolve_privy_ca_id(self) -> str:
+    def resolve_privy_ca_id(self) -> str:
         wallet_addr = (self.wallet.address or "").lower()
         proxy_raw = self.wallet.proxy or ""
-        proxy_norm = self._normalize_proxy(proxy_raw)
+        proxy_norm = self.normalize_proxy(proxy_raw)
         seed = f"{wallet_addr}|{proxy_norm}" if proxy_norm else wallet_addr
         return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
 
-    def _normalize_proxy(self, proxy: str) -> str:
+    def normalize_proxy(self, proxy: str) -> str:
         if not proxy:
             return ""
         try:
@@ -344,7 +344,7 @@ class PrivyAuth:
         except Exception:
             return ""
 
-    def _extract_privy_tokens(self, set_cookie: str) -> Dict[str, str]:
+    def extract_privy_tokens(self, set_cookie: str) -> Dict[str, str]:
         wanted = {"privy-token", "privy-id-token", "privy-refresh-token", "privy-access-token"}
         result = {}
 

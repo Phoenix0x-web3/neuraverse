@@ -1,6 +1,11 @@
+import asyncio
 import random
+import time
 from decimal import Decimal
 
+from loguru import logger
+
+from data.settings import Settings
 from libs.eth_async import exceptions
 
 
@@ -21,6 +26,32 @@ def randfloat(from_: int | float | str, to_: int | float | str, step: int | floa
     step = Decimal(str(step))
     rand_int = Decimal(str(random.randint(0, int((to_ - from_) / step))))
     return float(rand_int * step + from_)
+
+
+async def wait_for_acceptable_gas_price(client, wallet, max_gas_price: int = Settings().max_gas_price) -> bool:
+    gas_price = await client.transactions.gas_price()
+
+    if gas_price.Gwei > max_gas_price:
+        logger.warning(f"{wallet} | High gas price detected: {gas_price.Gwei} gwei")
+
+        wait_start = time.time()
+
+        while gas_price.Gwei > max_gas_price:
+            elapsed = time.time() - wait_start
+            if elapsed >= 120:
+                logger.error(
+                    f"{wallet} | Gas did not drop below {max_gas_price} gwei within 120s (last observed {gas_price.Gwei} gwei) — aborting swap"
+                )
+                return False
+
+            sleep = random.randint(10, 20)
+            await asyncio.sleep(sleep)
+
+            gas_price = await client.transactions.gas_price()
+
+        logger.info(f"{wallet} | Gas normalized below threshold: {gas_price.Gwei} gwei — continuing execution")
+
+    return True
 
 
 def update_dict(modifiable: dict, template: dict, rearrange: bool = True, remove_extra_keys: bool = False) -> dict:

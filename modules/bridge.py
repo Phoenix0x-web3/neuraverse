@@ -1,6 +1,6 @@
 import asyncio
+import math
 import random
-import time
 
 from loguru import logger
 from web3.types import TxParams
@@ -10,7 +10,7 @@ from data.settings import Settings
 from libs.base import Base
 from libs.eth_async.client import Client
 from libs.eth_async.data.models import Networks, TokenAmount, TxArgs
-from libs.eth_async.utils.utils import randfloat
+from libs.eth_async.utils.utils import randfloat, wait_for_acceptable_gas_price
 from utils.browser import Browser
 from utils.db_api.models import Wallet
 
@@ -25,38 +25,18 @@ class Bridge(Base):
         self.settings = Settings()
         self.session = Browser()
 
-    async def bridge_neura_to_sepolia(self, amount_eth: TokenAmount, max_gas_price: int) -> bool:
+    def __repr__(self):
+        return f"{self.__module__} | [{self.wallet.address}]"
+
+    async def bridge_neura_to_sepolia(self, amount_eth: TokenAmount, check_gas_price: bool = True) -> bool:
         try:
             logger.debug(f"{self.wallet} | Bridging {amount_eth.Ether} ANKR from Neura → Sepolia...")
 
             if amount_eth.Ether <= 0:
                 raise Exception(f"Invalid amount: {amount_eth.Ether}")
 
-            if max_gas_price:
-                gas_price = await self.client.transactions.gas_price()
-                logger.debug(f"{self.wallet} | DEBUG: initial gas price — {gas_price.Gwei} gwei")
-
-                if gas_price.Gwei > max_gas_price:
-                    logger.warning(f"{self.wallet} | High gas price detected: {gas_price.Gwei} gwei")
-
-                    wait_start = time.time()
-                    while gas_price.Gwei > max_gas_price:
-                        elapsed = time.time() - wait_start
-                        if elapsed >= 120:
-                            logger.warning(
-                                f"{self.wallet} | Gas did not drop below {max_gas_price} gwei within 120s "
-                                f"(last observed {gas_price.Gwei} gwei) — aborting swap"
-                            )
-                            return False
-                        sleep = random.randint(20, 60)
-                        logger.debug(f"{self.wallet} | DEBUG: gas still high ({gas_price.Gwei} gwei), sleeping {sleep}s (elapsed {int(elapsed)}s)")
-                        await asyncio.sleep(sleep)
-                        gas_price = await self.client.transactions.gas_price()
-                        logger.debug(f"{self.wallet} | DEBUG: refreshed gas price — {gas_price.Gwei} gwei")
-
-                    logger.info(f"{self.wallet} | Gas normalized below threshold: {gas_price.Gwei} gwei — continuing execution")
-                else:
-                    logger.debug(f"{self.wallet} | DEBUG: gas price acceptable — {gas_price.Gwei} gwei")
+            if check_gas_price and not await wait_for_acceptable_gas_price(client=self.client, wallet=self.wallet):
+                return False
 
             bridge_contract = await self.client.contracts.get(Contracts.NEURA_BRIDGE)
 
@@ -102,28 +82,28 @@ class Bridge(Base):
             logger.error(f"{self.wallet} | Error — {e}")
             return False
 
-    async def bridge_sepolia_to_neura(self, amount_eth: TokenAmount) -> bool:
+    async def bridge_sepolia_to_neura(self, amount: TokenAmount) -> bool:
         try:
-            if amount_eth.Ether <= 0:
-                raise Exception(f"Invalid amount: {amount_eth}")
+            if amount.Ether <= 0:
+                raise Exception(f"Invalid amount: {amount}")
 
-            logger.debug(f"{self.wallet} | Bridging {amount_eth.Ether} tANKR from Sepolia → Neura...")
+            logger.debug(f"{self.wallet} | Bridging {amount.Ether} tANKR from Sepolia → Neura...")
 
             token_contract = await self.client_sepolia.contracts.get(Contracts.SEPOLIA_TANKR)
             bridge_contract = await self.client_sepolia.contracts.get(Contracts.SEPOLIA_BRIDGE)
 
             allowance = await token_contract.functions.allowance(self.client_sepolia.account.address, Contracts.SEPOLIA_BRIDGE.address).call()
 
-            if allowance < amount_eth.Wei:
+            if allowance < amount.Wei:
                 logger.info(f"{self.wallet} | Approving bridge to spend tANKR...")
-                approve = self.approve_interface(
-                    token_address=Contracts.SEPOLIA_TANKR.address, spender=Contracts.SEPOLIA_BRIDGE.address, amount=amount_eth.Wei
+                approve = await self.approve_interface(
+                    token_address=Contracts.SEPOLIA_TANKR.address, spender=Contracts.SEPOLIA_BRIDGE.address, amount=amount
                 )
 
                 if approve:
-                    logger.success(f"{self.wallet} | Approval granted for {amount_eth.Ether} tANKR")
+                    logger.success(f"{self.wallet} | Approval granted for {amount.Ether} tANKR")
                 else:
-                    logger.error(f"{self.wallet} | Approval failed for {amount_eth.Ether} tANKR")
+                    logger.error(f"{self.wallet} | Approval failed for {amount.Ether} tANKR")
                     return False
 
             else:
@@ -131,12 +111,12 @@ class Bridge(Base):
 
             logger.debug(f"{self.wallet} | Depositing tANKR to bridge...")
 
-            tx_params = TxArgs(assets=amount_eth.Wei, receiver=self.client.account.address).tuple()
+            tx_params = TxArgs(assets=amount.Wei, receiver=self.client.account.address).tuple()
 
             data = bridge_contract.encode_abi("deposit", args=tx_params)
 
-            transaction = await self.client.transactions.sign_and_send(TxParams(to=bridge_contract.address, data=data, value=amount_eth.Wei))
-            recipient = await transaction.wait_for_receipt(client=self.client, timeout=300)
+            transaction = await self.client_sepolia.transactions.sign_and_send(TxParams(to=bridge_contract.address, data=data, value=amount.Wei))
+            recipient = await transaction.wait_for_receipt(client=self.client_sepolia, timeout=300)
 
             if recipient["status"] != 1:
                 logger.error(f"{self.wallet} | Bridge Sepolia→Neura deposit transaction reverted on-chain")
@@ -149,23 +129,21 @@ class Bridge(Base):
             logger.error(f"{self.wallet} | Error — {e}")
             return False
 
-    async def _bridge_sepolia_to_neura_all(self) -> bool:
+    async def bridge_sepolia_to_neura_all(self) -> bool:
         try:
             logger.debug(f"{self.wallet} | Bridging ALL tANKR from Sepolia → Neura...")
 
-            token_contract = await self.client_sepolia.contracts.get(Contracts.SEPOLIA_TANKR)
+            balance = await self.client.wallet.balance(token=Contracts.SEPOLIA_TANKR)
 
-            tankr_balance = await token_contract.functions.balanceOf(self.wallet.address).call()
+            min_balance = TokenAmount(amount=0.01, decimals=18)
 
-            MIN_BALANCE = TokenAmount(amount=0.01, decimals=18)
-
-            if tankr_balance < MIN_BALANCE.Wei:
-                logger.warning(f"{self.wallet} | tANKR balance too low ({tankr_balance:.6f} < {MIN_BALANCE}), skipping bridge")
+            if balance.Wei < min_balance.Wei:
+                logger.warning(f"{self.wallet} | tANKR balance too low ({balance.Ether} < {min_balance.Ether}), skipping bridge")
                 return False
 
-            logger.info(f"{self.wallet} | Bridging {tankr_balance} tANKR (ALL) from Sepolia → Neura")
+            logger.info(f"{self.wallet} | Bridging {balance.Ether} tANKR (ALL) from Sepolia → Neura")
 
-            sucsess = await self.bridge_sepolia_to_neura(amount_eth=TokenAmount(amount=tankr_balance, decimals=18, wei=True))
+            sucsess = await self.bridge_sepolia_to_neura(amount=balance)
 
             random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
 
@@ -174,7 +152,7 @@ class Bridge(Base):
                 await asyncio.sleep(random_sleep)
                 return False
 
-            logger.success(f"{self.wallet} | Bridge Sepolia → Neura completed: {tankr_balance} tANKR bridged, sleeping {random_sleep}s")
+            logger.success(f"{self.wallet} | Bridge Sepolia → Neura completed: {balance.Ether} tANKR bridged, sleeping {random_sleep}s")
             await asyncio.sleep(random_sleep)
             return True
 
@@ -182,34 +160,39 @@ class Bridge(Base):
             logger.error(f"{self.wallet} | Error — {e}")
             return False
 
-    async def _bridge_neura_to_sepolia_percent(self) -> bool:
+    async def bridge_neura_to_sepolia_percent(self) -> bool:
         try:
             logger.debug(f"{self.wallet} | Starting percentage-based bridge from Neura → Sepolia...")
 
             balance = await self.client.wallet.balance()
 
-            MIN_BALANCE = self.settings.min_native_balance
-            GAS_RESERVE = 0.2
+            min_balance = self.settings.min_native_balance
+            gas_reserve = 0.2
 
-            if not balance or balance.Ether < MIN_BALANCE:
-                logger.warning(f"{self.wallet} | ANKR balance too low ({balance.Ether if balance else 0:.6f} < {MIN_BALANCE}), skipping bridge")
+            if not balance or balance.Ether < min_balance:
+                logger.warning(f"{self.wallet} | ANKR balance too low ({balance.Ether if balance else 0:.6f} < {min_balance}), skipping bridge")
                 return False
 
-            available_balance = max(0, float(balance.Ether) - GAS_RESERVE)
+            available_balance = TokenAmount(
+                amount=max(0, float(balance.Ether) - gas_reserve),
+                decimals=18,
+            )
 
-            percent_to_brige = randfloat(from_=self.settings.brige_percet_min, to_=self.settings.brige_percet_max, step=0.001) / 100
+            precision = random.randint(2, 4)
+            percent = randfloat(from_=self.settings.brige_percet_min, to_=self.settings.brige_percet_max, step=0.001) / 100
+            raw_amount = float(available_balance.Ether) * percent
+            factor = 10**precision
+            safe_amount = math.floor(raw_amount * factor) / factor
 
-            bridge_amount = TokenAmount(amount=available_balance * percent_to_brige, decimals=18)
+            bridge_amount = TokenAmount(amount=safe_amount, decimals=18)
 
             if bridge_amount.Ether < 0.01:
                 logger.warning(f"{self.wallet} | Bridge amount too small: {bridge_amount.Ether}")
                 return False
 
-            max_gas_price = self.settings.max_gas_price
-
             logger.info(f"{self.wallet} | Bridging {bridge_amount.Ether} ANKR from Neura → Sepolia")
 
-            sucsess = await self.bridge_neura_to_sepolia(amount_eth=bridge_amount, max_gas_price=max_gas_price)
+            sucsess = await self.bridge_neura_to_sepolia(amount_eth=bridge_amount)
 
             random_sleep = random.randint(
                 self.settings.random_pause_between_actions_min,
@@ -230,22 +213,25 @@ class Bridge(Base):
             logger.error(f"{self.wallet} | Error — {e}")
             return False
 
-    async def _bridge_sepolia_to_neura_percent(self) -> bool:
+    async def bridge_sepolia_to_neura_percent(self) -> bool:
         try:
             logger.debug(f"{self.wallet} | Starting percentage-based bridge from Sepolia → Neura...")
-            token_contract = await self.client_sepolia.contracts.get(Contracts.SEPOLIA_TANKR)
 
-            balance = await token_contract.functions.balanceOf(self.wallet.address).call()
+            balance = await self.client.wallet.balance(token=Contracts.SEPOLIA_TANKR)
 
-            MIN_BALANCE = TokenAmount(amount=0.01, decimals=18)
+            min_balance = TokenAmount(amount=0.01, decimals=18)
 
-            if balance < MIN_BALANCE.Wei:
-                logger.warning(f"{self.wallet} | tANKR balance too low ({balance:.6f} < {MIN_BALANCE}), skipping bridge")
+            if balance.Wei < min_balance.Wei:
+                logger.warning(f"{self.wallet} | tANKR balance too low ({balance.Ether} < {min_balance.Ether}), skipping bridge")
                 return False
 
-            percent_to_brige = randfloat(from_=self.settings.brige_percet_min, to_=self.settings.brige_percet_max, step=0.001) / 100
+            precision = random.randint(2, 4)
+            percent = randfloat(from_=self.settings.brige_percet_min, to_=self.settings.brige_percet_max, step=0.001) / 100
+            raw_amount = float(balance.Ether) * percent
+            factor = 10**precision
+            safe_amount = math.floor(raw_amount * factor) / factor
 
-            bridge_amount = TokenAmount(amount=balance * percent_to_brige, decimals=18)
+            bridge_amount = TokenAmount(amount=safe_amount, decimals=18)
 
             if bridge_amount.Ether < 0.001:
                 logger.warning(f"{self.wallet} | Bridge amount too small: {bridge_amount}")
@@ -253,7 +239,7 @@ class Bridge(Base):
 
             logger.info(f"{self.wallet} | Bridging {bridge_amount.Ether:.6f} tANKR from Sepolia → Neura")
 
-            sucsess = await self.bridge_sepolia_to_neura(amount_eth=bridge_amount)
+            sucsess = await self.bridge_sepolia_to_neura(amount=bridge_amount)
 
             random_sleep = random.randint(
                 self.settings.random_pause_between_actions_min,
