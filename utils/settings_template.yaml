@@ -34,7 +34,7 @@ min_native_balance: 1
 # Maximum gas price allowed for execution (in Gwei)
 max_gas_price: 2500
 
-# Delay before running the new cicle of wallets after it has completed all actions  (5 - 8 hrs default)
+# Delay before running the new cycle of wallets after it has completed all actions  (5 - 8 hrs default)
 random_pause_wallet_after_completion:
   min: 18000
   max: 28800
