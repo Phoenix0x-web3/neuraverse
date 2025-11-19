@@ -217,7 +217,7 @@ class Bridge(Base):
         try:
             logger.debug(f"{self.wallet} | Starting percentage-based bridge from Sepolia → Neura...")
 
-            balance = await self.client.wallet.balance(token=Contracts.SEPOLIA_TANKR)
+            balance = await self.client_sepolia.wallet.balance(token=Contracts.SEPOLIA_TANKR)
 
             min_balance = TokenAmount(amount=0.01, decimals=18)
 
