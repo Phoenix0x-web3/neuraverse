@@ -22,8 +22,6 @@ class Settings(Singleton):
         self.log_level = json_data.get("log_level", "INFO")
         self.random_pause_start_wallet_min = json_data.get("random_pause_start_wallet", {}).get("min")
         self.random_pause_start_wallet_max = json_data.get("random_pause_start_wallet", {}).get("max")
-        self.random_pause_between_wallets_min = json_data.get("random_pause_between_wallets", {}).get("min")
-        self.random_pause_between_wallets_max = json_data.get("random_pause_between_wallets", {}).get("max")
         self.random_pause_between_actions_min = json_data.get("random_pause_between_actions", {}).get("min")
         self.random_pause_between_actions_max = json_data.get("random_pause_between_actions", {}).get("max")
         self.random_pause_wallet_after_completion_min = json_data.get("random_pause_wallet_after_completion", {}).get("min")

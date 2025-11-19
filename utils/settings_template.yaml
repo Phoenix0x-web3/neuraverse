@@ -39,11 +39,6 @@ random_pause_wallet_after_completion:
   min: 18000
   max: 28800
 
-# Random pause between wallets in seconds
-random_pause_between_wallets:
-  min: 5
-  max: 60
-
 # Random pause between actions in seconds
 random_pause_between_actions:
   min: 5
