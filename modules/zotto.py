@@ -208,7 +208,6 @@ class ZottoSwap(Base):
 
             if not swap_from_native:
                 try:
-                
                     approve = await self.approve_interface(
                         token_address=from_token.address,
                         spender=Contracts.ZOTTO_ROUTER_ADDRESS.address,
@@ -223,25 +222,22 @@ class ZottoSwap(Base):
                     else:
                         logger.error(f"{self.wallet} | Token approval failed for {amount.Ether} {from_token.title}")
                         return False
-                    
+
                 except ValueError as e:
                     message = str(e)
                     err_message = ""
                     if e.args and isinstance(e.args[0], dict):
                         err_message = str(e.args[0].get("message", ""))
-                        
+
                     if "Upfront cost exceeds account balance" in message or "Upfront cost exceeds account balance" in err_message:
                         logger.error(
                             f"{self.wallet} | Token approval failed: upfront cost exceeds account balance for {amount.Ether} {from_token.title} → {to_token.title}"
                         )
                         return False
-                    
+
                     else:
                         logger.error(f"{self.wallet} | Token approval failed for {amount.Ether} {from_token.title} → {to_token.title} — {e}")
                         return False
-                    
-                    
-                
 
             deadline_ms = int(time.time() * 1000) + (30 * 60 * 1000)
             recipient_address = "0x0000000000000000000000000000000000000000" if swap_from_native else self.client.account.address
