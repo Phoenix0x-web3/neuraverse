@@ -722,14 +722,23 @@ class Controller:
                     break
 
                 native_balance = await self.client.wallet.balance()
-                min_native_balace = self.settings.min_native_balance
+                min_native_balance = self.settings.min_native_balance
+                
+                if native_balance.Ether < 0.15:
+                    logger.warning(
+                        f"{self.wallet} | Native balance critically low ({native_balance.Ether} ANKR < 0.15 ANKR), stopping Zotto swaps"
+                    )
+                    break
 
                 try:
-                    if native_balance.Ether < min_native_balace:
+                    if native_balance.Ether < min_native_balance:
                         
-                        logger.warning(f"{self.wallet} | Native balance low: {native_balance.Ether} ANRK (min required: {min_native_balace} ANRK)")
+                        logger.warning(f"{self.wallet} | Native balance low: {native_balance.Ether} ANRK (min required: {min_native_balance} ANRK)")
 
-                        while native_balance.Ether < min_native_balace and attempts < max_fail_attempts:
+                        while native_balance.Ether < min_native_balance and attempts < max_fail_attempts:
+                            
+                            if native_balance.Ether < 0.15:
+                                break
                             
                             spendables = [token for token in candidates_with_balance if token.address != Contracts.ANKR.address]
 
@@ -785,7 +794,7 @@ class Controller:
                                 
                                 native_balance = await self.client.wallet.balance()
                                 all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
-                                all_token_balances[Contracts.ANKR.address] = await self.client.wallet.balance()
+                                all_token_balances[Contracts.ANKR.address] = native_balance
                                 
                                 if from_token in candidates_with_balance:
                                     candidates_with_balance.remove(from_token)
