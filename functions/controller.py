@@ -64,7 +64,7 @@ class Controller:
                         can_use_faucet = True
 
                 if can_use_faucet:
-                    actions.append(self.faucet)
+                    await self.faucet()
 
                 wallet_balance = await self.client.wallet.balance()
                 
@@ -738,7 +738,13 @@ class Controller:
                                 break
 
                             from_token = random.choice(spendables)
-                
+                            
+                            tokens_price = await self.zotto.get_pool_prices_if_liquid(token_0=from_token, token_1=Contracts.ANKR)
+
+                            if not tokens_price:
+                                attempts += 1
+                                continue
+                            
                             precision = random.randint(2, 4)
                             percent = randfloat(from_=self.settings.swaps_percent_min, to_=self.settings.swaps_percent_max, step=0.001) / 100
                             raw_amount = float(all_token_balances[from_token.address].Ether) * percent
@@ -756,6 +762,7 @@ class Controller:
                                 from_token=from_token,
                                 to_token=Contracts.ANKR,
                                 amount=swap_amount,
+                                tokens_price=tokens_price
                             )
                             
                             random_sleep = random.randint(
@@ -772,6 +779,9 @@ class Controller:
                                     f"({completed}/{total_swaps}). Next action in {random_sleep}s"
                                 )
                                 await asyncio.sleep(random_sleep)
+                                
+                                if completed >= total_swaps:
+                                    break
                                 
                                 native_balance = await self.client.wallet.balance()
                                 all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)

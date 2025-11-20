@@ -55,7 +55,7 @@ class Base:
             return False
 
         if not amount or amount.Wei > balance.Wei:
-            amount = balance
+            return False
 
         approved = await self.client.transactions.approved_amount(token=token_address, spender=spender, owner=self.client.account.address)
 

@@ -208,7 +208,7 @@ class Transactions:
             tx_params["maxFeePerGas"] = max(current_max, target_max_fee)
 
         if "gas" not in tx_params or not int(tx_params["gas"]):
-            tx_params["gas"] = (await self.estimate_gas(tx_params=tx_params)).Wei
+            tx_params["gas"] = int((await self.estimate_gas(tx_params=tx_params)).Wei * 1.5)
 
         return tx_params
 
