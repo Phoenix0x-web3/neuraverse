@@ -198,6 +198,12 @@ class ZottoSwap(Base):
         try:
             logger.debug(f"{self.wallet} | DEBUG: execute_swap START — amount={amount.Ether}, from={from_token.title}, to={to_token.title}")
 
+            native_balance = await self.client.wallet.balance()
+
+            if native_balance.Ether < 0.15:
+                logger.warning(f"{self.wallet} | Native balance too low ({native_balance.Ether} ANKR) for Zotto swap, skipping")
+                return False
+
             if amount.Wei <= 0:
                 raise ValueError(f"Invalid amount: {amount.Wei}")
 
