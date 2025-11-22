@@ -4,7 +4,6 @@ import json
 import os
 import re
 import time
-import uuid
 from urllib.parse import parse_qs, urlparse
 
 from loguru import logger
@@ -300,14 +299,13 @@ class NeuraVerse:
 
                 if rsc_response.status_code != 200:
                     logger.error(
-                        f"{self.wallet} | Non-200 faucet RSC response while fetching nonce "
-                        f"({rsc_response.status_code}). Body: {rsc_response.text}"
+                        f"{self.wallet} | Non-200 faucet RSC response while fetching nonce ({rsc_response.status_code}). Body: {rsc_response.text}"
                     )
                 else:
                     text = rsc_response.text
                     # Try to find a UUID-like nonce near the "initialFaucetNonce" key inside the RSC payload
                     nonce_match = re.search(
-                        r'initialFaucetNonce[^0-9a-fA-F]{0,300}([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
+                        r"initialFaucetNonce[^0-9a-fA-F]{0,300}([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
                         text,
                     )
                     if nonce_match:
