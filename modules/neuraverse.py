@@ -4,6 +4,7 @@ import json
 import os
 import re
 import time
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 from loguru import logger
@@ -277,6 +278,49 @@ class NeuraVerse:
             if not captcha_token:
                 raise ValueError("Сaptcha token missing")
 
+            faucet_nonce = None
+            try:
+                logger.debug(f"{self.wallet} | Fetching faucet nonce from RSC payload")
+
+                rsc_headers = {
+                    "accept": "text/x-component",
+                    "next-router-state-tree": "%5B%22%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%2Ctrue%5D",
+                    "origin": "https://neuraverse.neuraprotocol.io",
+                    "priority": "u=1, i",
+                    "referer": "https://neuraverse.neuraprotocol.io/?section=faucet",
+                }
+
+                rsc_response = await self.session.get(
+                    url="https://neuraverse.neuraprotocol.io/?section=faucet",
+                    cookies=cookie,
+                    headers=rsc_headers,
+                )
+
+                logger.debug(f"{self.wallet} | Faucet RSC nonce fetch status: {rsc_response.status_code}")
+
+                if rsc_response.status_code != 200:
+                    logger.error(
+                        f"{self.wallet} | Non-200 faucet RSC response while fetching nonce "
+                        f"({rsc_response.status_code}). Body: {rsc_response.text}"
+                    )
+                else:
+                    text = rsc_response.text
+                    # Try to find a UUID-like nonce near the "initialFaucetNonce" key inside the RSC payload
+                    nonce_match = re.search(
+                        r'initialFaucetNonce[^0-9a-fA-F]{0,300}([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
+                        text,
+                    )
+                    if nonce_match:
+                        faucet_nonce = nonce_match.group(1)
+                    else:
+                        logger.error(f"{self.wallet} | Failed to extract faucet nonce from RSC payload")
+            except Exception as e:
+                logger.error(f"{self.wallet} | Error while fetching faucet nonce — {e}")
+
+            if not faucet_nonce:
+                logger.error(f"{self.wallet} | Faucet nonce is missing after RSC fetch, aborting claim")
+                return False
+
             data = json.dumps(
                 [
                     self.client.account.address,
@@ -284,6 +328,7 @@ class NeuraVerse:
                     self.wallet.identity_token,
                     True,
                     captcha_token,
+                    faucet_nonce,
                 ],
                 separators=(",", ":"),
             )
