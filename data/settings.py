@@ -31,6 +31,7 @@ class Settings(Singleton):
         self.swaps_count_max = json_data.get("swaps_count", {}).get("max")
         self.swaps_percent_min = json_data.get("swaps_percent", {}).get("min")
         self.swaps_percent_max = json_data.get("swaps_percent", {}).get("max")
+        self.swaps_allowed_tokens = json_data.get("swaps_allowed_tokens", [])
 
         self.bridge_count_min = json_data.get("bridge_count", {}).get("min")
         self.bridge_count_max = json_data.get("bridge_count", {}).get("max")
