@@ -65,6 +65,8 @@ class Controller:
 
                 if can_use_faucet:
                     await self.faucet()
+                    random_sleep = random.randint(self.settings.random_pause_between_actions_min, self.settings.random_pause_between_actions_max)
+                    await asyncio.sleep(random_sleep)
 
                 wallet_balance = await self.client.wallet.balance()
                 
@@ -692,9 +694,33 @@ class Controller:
                 logger.warning(f"{self.wallet} | total_swaps is 0 — configure swaps_count_min/max in settings.yaml")
                 return False
             
+            tokens_list_api = await self.zotto.get_available_token_contracts()
             
-            tokens_list = await self.zotto.get_available_token_contracts()
+            if not tokens_list_api:
+                logger.error(f"{self.wallet} | Failed to fetch token list from API")
+                return False
             
+            allowed_token_list = self.settings.swaps_allowed_tokens
+            
+            if not allowed_token_list:
+                logger.error(f"{self.wallet} | swaps_allowed_tokens is empty — configure token list in settings.yaml")
+                return False
+                
+            tokens_list = []
+            nativ_in_token_list = False
+            
+            for token in tokens_list_api:
+                if token.address == Contracts.ANKR.address:
+                    nativ_in_token_list = True
+                    tokens_list.append(token)
+                    continue
+                
+                if token.title in allowed_token_list:
+                    tokens_list.append(token)
+                             
+            if not nativ_in_token_list:
+                tokens_list.append(Contracts.ANKR)
+                
             if not tokens_list or len(tokens_list) < 2:
                 logger.error(f"{self.wallet} | Not enough tokens available")
                 return False
@@ -801,6 +827,7 @@ class Controller:
                             else:
                                 
                                 attempts += 1
+                                native_balance = await self.client.wallet.balance()
                                 logger.error(
                                     f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether} {from_token.title} → ANKR failed. "
                                     f"Next action in {random_sleep}s"

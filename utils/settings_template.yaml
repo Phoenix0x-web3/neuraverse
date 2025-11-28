@@ -58,7 +58,10 @@ swaps_count:
 swaps_percent:
   min: 25
   max: 50
-  
+
+# List of token symbols that can be used for on-chain swaps
+swaps_allowed_tokens: [ETH, ARB, MEME, OP, TRX, USDT, POL, BTC, SUI]
+
 # Onchaun Bridge percent
 bridge_percet:
   min: 10
