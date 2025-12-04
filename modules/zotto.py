@@ -40,7 +40,7 @@ class ZottoSwap(Base):
             }
 
             response = await self.session.post(
-                url="https://api.goldsky.com/api/public/project_cmc8t6vh6mqlg01w19r2g15a7/subgraphs/analytics/1.0.1/gn",
+                url="https://api.goldsky.com/api/public/project_cmc8t6vh6mqlg01w19r2g15a7/subgraphs/analytics/2.0.0/gn",
                 headers=self.headers,
                 json=payload,
             )
@@ -106,11 +106,11 @@ class ZottoSwap(Base):
                 "variables": {
                     "poolIds": pools,
                 },
-                "query": "query MultiplePools($poolIds: [ID!]) {\n  pools(where: { id_in: $poolIds }) {\n    id\n    fee\n    token0 {\n      id\n      symbol\n      name\n      decimals\n      derivedMatic\n      __typename\n    }\n    token1 {\n      id\n      symbol\n      name\n      decimals\n      derivedMatic\n      __typename\n    }\n    sqrtPrice\n    liquidity\n    tick\n    tickSpacing\n    totalValueLockedUSD\n    volumeUSD\n    feesUSD\n    untrackedFeesUSD\n    token0Price\n    token1Price\n    __typename\n  }\n}",
+                "query": "query MultiplePools($poolIds: [ID!]) {\n  pools(where: {id_in: $poolIds}) {\n    ...PoolFields\n    __typename\n  }\n}\n\nfragment PoolFields on Pool {\n  id\n  fee\n  token0 {\n    ...TokenFields\n    __typename\n  }\n  token1 {\n    ...TokenFields\n    __typename\n  }\n  sqrtPrice\n  liquidity\n  tick\n  tickSpacing\n  totalValueLockedUSD\n  volumeUSD\n  feesUSD\n  untrackedFeesUSD\n  token0Price\n  token1Price\n  __typename\n}\n\nfragment TokenFields on Token {\n  id\n  symbol\n  name\n  decimals\n  derivedMatic\n  __typename\n}",
             }
 
             response = await self.session.post(
-                url="https://api.goldsky.com/api/public/project_cmc8t6vh6mqlg01w19r2g15a7/subgraphs/analytics/1.0.1/gn",
+                url="https://api.goldsky.com/api/public/project_cmc8t6vh6mqlg01w19r2g15a7/subgraphs/analytics/2.0.0/gn",
                 headers=self.headers,
                 json=payload,
             )

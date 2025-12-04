@@ -707,19 +707,12 @@ class Controller:
                 return False
                 
             tokens_list = []
-            nativ_in_token_list = False
             
             for token in tokens_list_api:
-                if token.address == Contracts.ANKR.address:
-                    nativ_in_token_list = True
-                    tokens_list.append(token)
-                    continue
-                
                 if token.title in allowed_token_list:
                     tokens_list.append(token)
                              
-            if not nativ_in_token_list:
-                tokens_list.append(Contracts.ANKR)
+            tokens_list.append(Contracts.ANKR)
                 
             if not tokens_list or len(tokens_list) < 2:
                 logger.error(f"{self.wallet} | Not enough tokens available")
@@ -740,7 +733,7 @@ class Controller:
                 logger.debug(f"{self.wallet} | DEBUG: loop heartbeat → completed={completed}, attempts={attempts}, total={total_swaps}")
 
                 candidates_with_balance = [
-                    token for token in tokens_list if token.address in all_token_balances and all_token_balances[token.address].Ether > 0.1
+                    token for token in tokens_list if token.address in all_token_balances and all_token_balances[token.address].Ether > 0.01
                 ]
 
                 if not candidates_with_balance:
@@ -781,7 +774,7 @@ class Controller:
                                 continue
                             
                             precision = random.randint(2, 4)
-                            percent = randfloat(from_=self.settings.swaps_percent_min, to_=self.settings.swaps_percent_max, step=0.001) / 100
+                            percent = randfloat(from_=96, to_=99, step=0.001) / 100
                             raw_amount = float(all_token_balances[from_token.address].Ether) * percent
                             factor = 10 ** precision
                             safe_amount = math.floor(raw_amount * factor) / factor
@@ -879,8 +872,13 @@ class Controller:
                         if ok:
                             
                             attempts = 0
-                            all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
-                            all_token_balances[to_token.address] = await self.client.wallet.balance(to_token)
+                            
+                            for token in (from_token, to_token):
+                                if token.address == Contracts.ANKR.address:
+                                    all_token_balances[token.address] = await self.client.wallet.balance()
+                                else:
+                                    all_token_balances[token.address] = await self.client.wallet.balance(token)
+                            
                             logger.success(
                                 f"{self.wallet} | Swap successful: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
                                 f"Next action in {random_sleep}s"
