@@ -215,7 +215,7 @@ class NeuraVerse:
 
             headers = {"Referer": "https://neuraverse.neuraprotocol.io/?section=faucet"}
 
-            response = await self.session.get(url="https://neuraverse.neuraprotocol.io/_next/static/chunks/2115-6aa39717263ebbb6.js", headers=headers)
+            response = await self.session.get(url="https://neuraverse.neuraprotocol.io/_next/static/chunks/1633-d4d4d375327fb71c.js", headers=headers)
             logger.debug(f"{self.wallet} | Faucet JS chunk status: {response.status_code}")
 
             if response.status_code != 200:
@@ -266,7 +266,7 @@ class NeuraVerse:
             captcha_handler = CaptchaHandler(wallet=self.wallet)
             captcha_raw = await captcha_handler.cloudflare_token(
                 websiteURL="https://neuraverse.neuraprotocol.io/?section=faucet",
-                websiteKey="0x4AAAAAACAe7c3f7wATdkJe",
+                websiteKey="0x4AAAAAACFWAVaa_Rh1pBFY",
             )
 
             if isinstance(captcha_raw, dict):
