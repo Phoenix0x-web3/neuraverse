@@ -275,7 +275,6 @@ class Controller:
             ]
                 
             supported_quest = [
-                *follow_task,
                 "daily_login",
                 "collect_all_pulses",
                 "visit_all_map",
