@@ -268,14 +268,24 @@ class Controller:
             logger.info(
                 f"{self.wallet} | Quests overview: claimable={claimable_quests}, not_completed={not_completed_quests}, total={len(all_quests)}"
             )
-
+            
+            follow_task = [
+                "twitter_follow_neura_official",
+                "twitter_follow_zotto_official",
+            ]
+                
             supported_quest = [
+                *follow_task,
                 "daily_login",
                 "collect_all_pulses",
                 "visit_all_map",
                 "claim_faucet",
-                "twitter_follow_neura_official"
             ]
+            
+            if self.wallet.twitter_token:
+                supported_quest = [*follow_task, *supported_quest]
+            else:
+                logger.info(f"{self.wallet} | Twitter token missing — follow quests will be skipped")
             
             total_quest_claimed = 0
             total_quest_completed = 0
@@ -307,7 +317,7 @@ class Controller:
                             await asyncio.sleep(random_sleep)
                             continue
                         
-                        if completion_result and quest_id == "twitter_follow_neura_official":
+                        if completion_result and quest_id in follow_task:
                             total_quest_completed += 1
                             logger.info(f"{self.wallet} | Quest '{quest_name}' completed ({quest_points} pts). Reward will be claimed on the next iteration. Next action in {random_sleep}s")
                             await asyncio.sleep(random_sleep)
@@ -382,7 +392,10 @@ class Controller:
                 return await self.portal.faucet()
             
             elif quest_id == "twitter_follow_neura_official":
-                return await self.follow_neura()
+                return await self.follow_twitter(account_name='Neura_io')
+            
+            elif quest_id == "twitter_follow_zotto_official":
+                return await self.follow_twitter(account_name='zottoHQ')
 
             else:
                 raise TypeError(f"Quest {quest_name} not supported yet")
@@ -938,10 +951,8 @@ class Controller:
         await self.portal.visit_location("faucet:visit")
         return await self.portal.faucet()
     
-    async def follow_neura(self) -> bool:
-        try:
-            account_name = 'Neura_io'
-            
+    async def follow_twitter(self, account_name: str) -> bool:
+        try: 
             twitter = TwitterClient(user=self.wallet)
 
             logger.info(f"{self.wallet} | Attempting to follow '@{account_name}'")     
