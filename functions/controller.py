@@ -796,8 +796,14 @@ class Controller:
                                 attempts += 1
                                 continue
                             
-                            swap_amount = all_token_balances[from_token.address]
-                            
+                            safe_wei = all_token_balances[from_token.address].Wei - 1
+
+                            swap_amount = TokenAmount(
+                                amount=safe_wei,
+                                decimals=await self.client.transactions.get_decimals(contract=from_token.address),
+                                wei=True,
+                            )
+                                           
                             logger.info(f"{self.wallet} | Restoring native balance: swapping {swap_amount.Ether} {from_token.title} → ANKR")
                             
                             ok = await self.zotto.execute_swap(
@@ -866,7 +872,22 @@ class Controller:
                         from_token_balance_value = float(from_token_balance.Ether)
 
                         if from_token_balance_value <= 0.01:
-                            percent_to_swap = 1.0
+                            safe_wei = from_token_balance.Wei - 1
+
+                            if safe_wei <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Computed non-positive safe_wei for {from_token.title} during swap, skipping"
+                                )
+                                continue
+
+                            swap_amount = TokenAmount(
+                                amount=safe_wei,
+                                decimals=18
+                                if from_token.address == Contracts.ANKR.address
+                                else await self.client.transactions.get_decimals(contract=from_token.address),
+                                wei=True,
+                            )
                         else:
                             percent_to_swap = randfloat(
                                 from_=self.settings.swaps_percent_min,
@@ -874,41 +895,43 @@ class Controller:
                                 step=0.001,
                             ) / 100
 
-                        raw_amount = from_token_balance_value * percent_to_swap
+                            raw_amount = from_token_balance_value * percent_to_swap
 
-                        if raw_amount <= 0:
-                            attempts += 1
-                            logger.warning(f"{self.wallet} | Computed non-positive raw_amount for {from_token.title}, skipping swap")
-                            continue
+                            if raw_amount <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Computed non-positive raw_amount for {from_token.title}, skipping swap"
+                                )
+                                continue
 
-                        precision = random.randint(2, 5)
+                            precision = random.randint(2, 5)
 
-                        if raw_amount < 1:
-                            needed_precision = max(
-                                2,
-                                min(5, int(math.floor(-math.log10(raw_amount))) + 1),
+                            if raw_amount < 1:
+                                needed_precision = max(
+                                    2,
+                                    min(5, int(math.floor(-math.log10(raw_amount))) + 1),
+                                )
+                            else:
+                                needed_precision = 2
+
+                            precision = max(precision, needed_precision)
+
+                            factor = 10 ** precision
+                            safe_amount = math.floor(raw_amount * factor) / factor
+
+                            if safe_amount <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Computed swap amount 0 for {from_token.title} (raw={raw_amount}, precision={precision}), skipping"
+                                )
+                                continue
+
+                            swap_amount = TokenAmount(
+                                amount=safe_amount,
+                                decimals=18
+                                if from_token.address == Contracts.ANKR.address
+                                else await self.client.transactions.get_decimals(contract=from_token.address),
                             )
-                        else:
-                            needed_precision = 2
-
-                        precision = max(precision, needed_precision)
-
-                        factor = 10 ** precision
-                        safe_amount = math.floor(raw_amount * factor) / factor
-
-                        if safe_amount <= 0:
-                            attempts += 1
-                            logger.warning(
-                                f"{self.wallet} | Computed swap amount 0 for {from_token.title} (raw={raw_amount}, precision={precision}), skipping"
-                            )
-                            continue
-
-                        swap_amount = TokenAmount(
-                            amount=safe_amount,
-                            decimals=18
-                            if from_token.address == Contracts.ANKR.address
-                            else await self.client.transactions.get_decimals(contract=from_token.address),
-                        )
 
                         logger.info(f"{self.wallet} | Swapping {swap_amount.Ether} {from_token.title} → {to_token.title}")
 
