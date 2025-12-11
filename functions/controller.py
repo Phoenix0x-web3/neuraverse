@@ -815,7 +815,7 @@ class Controller:
                                 wei=True,
                             )
                                            
-                            logger.info(f"{self.wallet} | Restoring native balance: swapping {swap_amount.Ether} {from_token.title} → ANKR")
+                            logger.info(f"{self.wallet} | Restoring native balance: swapping {swap_amount.Ether:.5f} {from_token.title} → ANKR")
                             
                             ok = await self.zotto.execute_swap(
                                 from_token=from_token,
@@ -834,7 +834,7 @@ class Controller:
                                 completed += 1
                                 attempts = 0
                                 logger.success(
-                                    f"{self.wallet} | Native balance restored: swapped {swap_amount.Ether} {from_token.title} → ANKR "
+                                    f"{self.wallet} | Native balance restored: swapped {swap_amount.Ether:.5f} {from_token.title} → ANKR "
                                     f"({completed}/{total_swaps}). Next action in {random_sleep}s"
                                 )
                                 await asyncio.sleep(random_sleep)
@@ -851,7 +851,7 @@ class Controller:
                                 attempts += 1
                                 native_balance = await self.client.wallet.balance()
                                 logger.error(
-                                    f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether} {from_token.title} → ANKR failed. "
+                                    f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether:.5f} {from_token.title} → ANKR failed. "
                                     f"Next action in {random_sleep}s"
                                 )
                                 await asyncio.sleep(random_sleep)
@@ -953,7 +953,7 @@ class Controller:
                                 else await self.client.transactions.get_decimals(contract=from_token.address),
                             )
 
-                        logger.info(f"{self.wallet} | Swapping {swap_amount.Ether} {from_token.title} → {to_token.title}")
+                        logger.info(f"{self.wallet} | Swapping {swap_amount.Ether:.5f} {from_token.title} → {to_token.title}")
 
                         ok = await self.zotto.execute_swap(
                             from_token=from_token,
@@ -975,7 +975,7 @@ class Controller:
                                 else:
                                     all_token_balances[token.address] = await self.client.wallet.balance(token)
                             logger.success(
-                                f"{self.wallet} | Swap successful: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
+                                f"{self.wallet} | Swap successful: {swap_amount.Ether:.5f} {from_token.title} → {to_token.title}. "
                                 f"Next action in {random_sleep}s"
                             )
                             completed += 1
@@ -983,7 +983,7 @@ class Controller:
                         else:
                             attempts += 1
                             logger.error(
-                                f"{self.wallet} | Swap failed: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
+                                f"{self.wallet} | Swap failed: {swap_amount.Ether:.5f} {from_token.title} → {to_token.title}. "
                                 f"Next action in {random_sleep}s"
                             )
                             await asyncio.sleep(random_sleep)
