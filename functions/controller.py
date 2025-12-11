@@ -760,9 +760,9 @@ class Controller:
                 native_balance = await self.client.wallet.balance()
                 min_native_balance = self.settings.min_native_balance
                 
-                if native_balance.Ether < 0.15:
+                if native_balance.Ether < 0.75:
                     logger.warning(
-                        f"{self.wallet} | Native balance critically low ({native_balance.Ether} ANKR < 0.15 ANKR), stopping Zotto swaps"
+                        f"{self.wallet} | Native balance critically low ({native_balance.Ether} ANKR < 0.5 ANKR), stopping Zotto swaps"
                     )
                     break
 
@@ -773,7 +773,7 @@ class Controller:
 
                         while native_balance.Ether < min_native_balance and attempts < max_fail_attempts:
                             
-                            if native_balance.Ether < 0.15:
+                            if native_balance.Ether < 0.75:
                                 break
                             
                             spendables = [
@@ -799,15 +799,15 @@ class Controller:
                                 attempts += 1
                                 continue
 
-                            percent_to_swap = randfloat(from_=95, to_=98, step=0.001) / 100
-                            safe_wei = int(all_token_balances[from_token.address].Wei * percent_to_swap)
+                            from_token_balance = await self.client.wallet.balance(from_token)
+                            safe_wei = from_token_balance.Wei
 
                             if safe_wei <= 0:
                                 attempts += 1
                                 logger.warning(
-                                    f"{self.wallet} | Computed non-positive safe_wei for {from_token.title} during restore, skipping"
+                                    f"{self.wallet} | Non-positive balance for {from_token.title} during restore, skipping"
                                 )
-                                break
+                                continue
 
                             swap_amount = TokenAmount(
                                 amount=safe_wei,
@@ -891,13 +891,13 @@ class Controller:
                         from_token_balance_value = float(from_token_balance.Ether)
 
                         if from_token_balance_value <= 0.01:
-                            percent_to_swap = randfloat(from_=95, to_=98, step=0.001) / 100
-                            safe_wei = int(from_token_balance.Wei * percent_to_swap)
+                            from_token_balance_fresh = await self.client.wallet.balance(from_token)
+                            safe_wei = from_token_balance_fresh.Wei
 
                             if safe_wei <= 0:
                                 attempts += 1
                                 logger.warning(
-                                    f"{self.wallet} | Computed non-positive safe_wei for {from_token.title} during swap, skipping"
+                                    f"{self.wallet} | Non-positive safe_wei for {from_token.title} during swap, skipping"
                                 )
                                 continue
 
