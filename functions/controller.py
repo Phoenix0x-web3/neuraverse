@@ -716,6 +716,7 @@ class Controller:
                 return False
             
             tokens_list_api = await self.zotto.get_available_token_contracts()
+            tokens_list_api = [token for token in tokens_list_api if token.title != "WANKR"]
             
             if not tokens_list_api:
                 logger.error(f"{self.wallet} | Failed to fetch token list from API")
@@ -734,6 +735,9 @@ class Controller:
                     tokens_list.append(token)
                              
             tokens_list.append(Contracts.ANKR)
+
+            tokens_for_balances = list(tokens_list_api)
+            tokens_for_balances.append(Contracts.ANKR)
                 
             if not tokens_list or len(tokens_list) < 2:
                 logger.error(f"{self.wallet} | Not enough tokens available")
@@ -747,26 +751,18 @@ class Controller:
 
             logger.info(f"{self.wallet} | Starting Zotto auto-swap: total={total_swaps}")
             
-            all_token_balances = await self.zotto.current_balances(tokens_list)
+            all_token_balances = await self.zotto.current_balances(tokens_for_balances)
             
             while completed < total_swaps and attempts < max_fail_attempts:
                 
                 logger.debug(f"{self.wallet} | DEBUG: loop heartbeat → completed={completed}, attempts={attempts}, total={total_swaps}")
-
-                candidates_with_balance = [
-                    token for token in tokens_list if token.address in all_token_balances and all_token_balances[token.address].Ether > 0.01
-                ]
-
-                if not candidates_with_balance:
-                    logger.error(f"{self.wallet} | No tokens with sufficient balance for swap")
-                    break
-
+                              
                 native_balance = await self.client.wallet.balance()
                 min_native_balance = self.settings.min_native_balance
                 
-                if native_balance.Ether < 0.15:
+                if native_balance.Ether < 0.5:
                     logger.warning(
-                        f"{self.wallet} | Native balance critically low ({native_balance.Ether} ANKR < 0.15 ANKR), stopping Zotto swaps"
+                        f"{self.wallet} | Native balance critically low ({native_balance.Ether} ANKR < 0.5 ANKR), stopping Zotto swaps"
                     )
                     break
 
@@ -777,10 +773,19 @@ class Controller:
 
                         while native_balance.Ether < min_native_balance and attempts < max_fail_attempts:
                             
-                            if native_balance.Ether < 0.15:
+                            if native_balance.Ether < 0.5:
                                 break
                             
-                            spendables = [token for token in candidates_with_balance if token.address != Contracts.ANKR.address]
+                            spendables = [
+                                token
+                                for token in tokens_for_balances
+                                if token.address in all_token_balances
+                                and token.address != Contracts.ANKR.address
+                                and (
+                                    token.title == "USDT"
+                                    or all_token_balances[token.address].Ether > 0.1
+                                )
+                            ]
 
                             if not spendables:
                                 attempts += 1
@@ -793,19 +798,24 @@ class Controller:
                             if not tokens_price:
                                 attempts += 1
                                 continue
-                            
-                            precision = random.randint(2, 4)
-                            percent = randfloat(from_=96, to_=99, step=0.001) / 100
-                            raw_amount = float(all_token_balances[from_token.address].Ether) * percent
-                            factor = 10 ** precision
-                            safe_amount = math.floor(raw_amount * factor) / factor
-                            
+
+                            from_token_balance = await self.client.wallet.balance(from_token)
+                            safe_wei = from_token_balance.Wei
+
+                            if safe_wei <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Non-positive balance for {from_token.title} during restore, skipping"
+                                )
+                                continue
+
                             swap_amount = TokenAmount(
-                                amount=safe_amount,
+                                amount=safe_wei,
                                 decimals=await self.client.transactions.get_decimals(contract=from_token.address),
+                                wei=True,
                             )
-                            
-                            logger.info(f"{self.wallet} | Restoring native balance: swapping {swap_amount.Ether} {from_token.title} → ANKR")
+                                           
+                            logger.info(f"{self.wallet} | Restoring native balance: swapping {swap_amount.Ether:.5f} {from_token.title} → ANKR")
                             
                             ok = await self.zotto.execute_swap(
                                 from_token=from_token,
@@ -824,7 +834,7 @@ class Controller:
                                 completed += 1
                                 attempts = 0
                                 logger.success(
-                                    f"{self.wallet} | Native balance restored: swapped {swap_amount.Ether} {from_token.title} → ANKR "
+                                    f"{self.wallet} | Native balance restored: swapped {swap_amount.Ether:.5f} {from_token.title} → ANKR "
                                     f"({completed}/{total_swaps}). Next action in {random_sleep}s"
                                 )
                                 await asyncio.sleep(random_sleep)
@@ -836,14 +846,12 @@ class Controller:
                                 all_token_balances[from_token.address] = await self.client.wallet.balance(from_token)
                                 all_token_balances[Contracts.ANKR.address] = native_balance
                                 
-                                if from_token in candidates_with_balance:
-                                    candidates_with_balance.remove(from_token)
                             else:
                                 
                                 attempts += 1
                                 native_balance = await self.client.wallet.balance()
                                 logger.error(
-                                    f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether} {from_token.title} → ANKR failed. "
+                                    f"{self.wallet} | Failed to restore native balance: swap {swap_amount.Ether:.5f} {from_token.title} → ANKR failed. "
                                     f"Next action in {random_sleep}s"
                                 )
                                 await asyncio.sleep(random_sleep)
@@ -855,7 +863,20 @@ class Controller:
                             continue
 
                     else:
-                        
+                        candidates_with_balance = [
+                            token
+                            for token in tokens_list
+                            if token.address in all_token_balances
+                            and (
+                                token.title == "USDT"
+                                or all_token_balances[token.address].Ether > 0.1
+                            )
+                        ]
+
+                        if not candidates_with_balance:
+                            logger.error(f"{self.wallet} | No tokens with sufficient balance for swap")
+                            break
+
                         from_token = random.choice(candidates_with_balance)
                         other_tokens = [token for token in tokens_list if token.address != from_token.address]
                         to_token = random.choice(other_tokens)
@@ -867,51 +888,102 @@ class Controller:
                             continue
 
                         from_token_balance = all_token_balances[from_token.address]
-                        percent_to_swap = randfloat(from_=self.settings.swaps_percent_min, to_=self.settings.swaps_percent_max, step=0.001) / 100
-                        swap_amount = TokenAmount(
-                            amount=round(float(from_token_balance.Ether) * percent_to_swap, random.randint(2, 4)),
-                            decimals=18
-                            if from_token.address == Contracts.ANKR.address
-                            else await self.client.transactions.get_decimals(contract=from_token.address),
-                        )
-                        
-                        logger.info(f"{self.wallet} | Swapping {swap_amount.Ether} {from_token.title} → {to_token.title}")
-                        
+                        from_token_balance_value = float(from_token_balance.Ether)
+
+                        if from_token_balance_value <= 0.01:
+                            from_token_balance_fresh = await self.client.wallet.balance(from_token)
+                            safe_wei = from_token_balance_fresh.Wei
+
+                            if safe_wei <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Non-positive safe_wei for {from_token.title} during swap, skipping"
+                                )
+                                continue
+
+                            swap_amount = TokenAmount(
+                                amount=safe_wei,
+                                decimals=18
+                                if from_token.address == Contracts.ANKR.address
+                                else await self.client.transactions.get_decimals(contract=from_token.address),
+                                wei=True,
+                            )
+                        else:
+                            percent_to_swap = randfloat(
+                                from_=self.settings.swaps_percent_min,
+                                to_=self.settings.swaps_percent_max,
+                                step=0.001,
+                            ) / 100
+
+                            raw_amount = from_token_balance_value * percent_to_swap
+
+                            if raw_amount <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Computed non-positive raw_amount for {from_token.title}, skipping swap"
+                                )
+                                continue
+
+                            precision = random.randint(2, 5)
+
+                            if raw_amount < 1:
+                                needed_precision = max(
+                                    2,
+                                    min(5, int(math.floor(-math.log10(raw_amount))) + 1),
+                                )
+                            else:
+                                needed_precision = 2
+
+                            precision = max(precision, needed_precision)
+
+                            factor = 10 ** precision
+                            safe_amount = math.floor(raw_amount * factor) / factor
+
+                            if safe_amount <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Computed swap amount 0 for {from_token.title} (raw={raw_amount}, precision={precision}), skipping"
+                                )
+                                continue
+
+                            swap_amount = TokenAmount(
+                                amount=safe_amount,
+                                decimals=18
+                                if from_token.address == Contracts.ANKR.address
+                                else await self.client.transactions.get_decimals(contract=from_token.address),
+                            )
+
+                        logger.info(f"{self.wallet} | Swapping {swap_amount.Ether:.5f} {from_token.title} → {to_token.title}")
+
                         ok = await self.zotto.execute_swap(
                             from_token=from_token,
                             to_token=to_token,
                             amount=swap_amount,
                             tokens_price=tokens_price,
                         )
-                        
-                        
+
                         random_sleep = random.randint(
                             self.settings.random_pause_between_actions_min,
                             self.settings.random_pause_between_actions_max,
                         )
-                        
+
                         if ok:
-                            
                             attempts = 0
-                            
                             for token in (from_token, to_token):
                                 if token.address == Contracts.ANKR.address:
                                     all_token_balances[token.address] = await self.client.wallet.balance()
                                 else:
                                     all_token_balances[token.address] = await self.client.wallet.balance(token)
-                            
                             logger.success(
-                                f"{self.wallet} | Swap successful: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
+                                f"{self.wallet} | Swap successful: {swap_amount.Ether:.5f} {from_token.title} → {to_token.title}. "
                                 f"Next action in {random_sleep}s"
                             )
                             completed += 1
                             await asyncio.sleep(random_sleep)
-                            
                         else:
-                            
                             attempts += 1
                             logger.error(
-                                f"{self.wallet} | Swap failed: {swap_amount.Ether} {from_token.title} → {to_token.title}. "
+                                f"{self.wallet} | Swap failed: {swap_amount.Ether:.5f} {from_token.title} → {to_token.title}. "
                                 f"Next action in {random_sleep}s"
                             )
                             await asyncio.sleep(random_sleep)
