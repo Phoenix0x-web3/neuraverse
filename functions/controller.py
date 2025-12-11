@@ -783,7 +783,7 @@ class Controller:
                                 and token.address != Contracts.ANKR.address
                                 and (
                                     token.title == "USDT"
-                                    or all_token_balances[token.address].Ether > 0.01
+                                    or all_token_balances[token.address].Ether > 0.1
                                 )
                             ]
 
@@ -798,9 +798,10 @@ class Controller:
                             if not tokens_price:
                                 attempts += 1
                                 continue
-                            
-                            safe_wei = int(all_token_balances[from_token.address].Wei * 0.99)
-                            
+
+                            percent_to_swap = randfloat(from_=95, to_=98, step=0.001) / 100
+                            safe_wei = int(all_token_balances[from_token.address].Wei * percent_to_swap)
+
                             if safe_wei <= 0:
                                 attempts += 1
                                 logger.warning(
@@ -868,7 +869,7 @@ class Controller:
                             if token.address in all_token_balances
                             and (
                                 token.title == "USDT"
-                                or all_token_balances[token.address].Ether > 0.01
+                                or all_token_balances[token.address].Ether > 0.1
                             )
                         ]
 
@@ -890,7 +891,8 @@ class Controller:
                         from_token_balance_value = float(from_token_balance.Ether)
 
                         if from_token_balance_value <= 0.01:
-                            safe_wei = int(from_token_balance.Wei * 0.99)
+                            percent_to_swap = randfloat(from_=95, to_=98, step=0.001) / 100
+                            safe_wei = int(from_token_balance.Wei * percent_to_swap)
 
                             if safe_wei <= 0:
                                 attempts += 1
