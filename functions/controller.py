@@ -780,8 +780,11 @@ class Controller:
                                 token
                                 for token in tokens_for_balances
                                 if token.address in all_token_balances
-                                and all_token_balances[token.address].Ether > 0.001
                                 and token.address != Contracts.ANKR.address
+                                and (
+                                    token.title == "USDT"
+                                    or all_token_balances[token.address].Ether > 0.01
+                                )
                             ]
 
                             if not spendables:
@@ -796,7 +799,14 @@ class Controller:
                                 attempts += 1
                                 continue
                             
-                            safe_wei = all_token_balances[from_token.address].Wei - 1
+                            safe_wei = int(all_token_balances[from_token.address].Wei * 0.99)
+                            
+                            if safe_wei <= 0:
+                                attempts += 1
+                                logger.warning(
+                                    f"{self.wallet} | Computed non-positive safe_wei for {from_token.title} during restore, skipping"
+                                )
+                                break
 
                             swap_amount = TokenAmount(
                                 amount=safe_wei,
@@ -852,7 +862,15 @@ class Controller:
                             continue
 
                     else:
-                        candidates_with_balance = [token for token in tokens_list if token.address in all_token_balances and all_token_balances[token.address].Ether > 0.001]
+                        candidates_with_balance = [
+                            token
+                            for token in tokens_list
+                            if token.address in all_token_balances
+                            and (
+                                token.title == "USDT"
+                                or all_token_balances[token.address].Ether > 0.01
+                            )
+                        ]
 
                         if not candidates_with_balance:
                             logger.error(f"{self.wallet} | No tokens with sufficient balance for swap")
@@ -872,7 +890,7 @@ class Controller:
                         from_token_balance_value = float(from_token_balance.Ether)
 
                         if from_token_balance_value <= 0.01:
-                            safe_wei = from_token_balance.Wei - 1
+                            safe_wei = int(from_token_balance.Wei * 0.99)
 
                             if safe_wei <= 0:
                                 attempts += 1
