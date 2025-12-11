@@ -760,7 +760,7 @@ class Controller:
                 native_balance = await self.client.wallet.balance()
                 min_native_balance = self.settings.min_native_balance
                 
-                if native_balance.Ether < 0.75:
+                if native_balance.Ether < 0.5:
                     logger.warning(
                         f"{self.wallet} | Native balance critically low ({native_balance.Ether} ANKR < 0.5 ANKR), stopping Zotto swaps"
                     )
@@ -773,7 +773,7 @@ class Controller:
 
                         while native_balance.Ether < min_native_balance and attempts < max_fail_attempts:
                             
-                            if native_balance.Ether < 0.75:
+                            if native_balance.Ether < 0.5:
                                 break
                             
                             spendables = [
