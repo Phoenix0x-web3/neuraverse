@@ -31,8 +31,13 @@ async def execute(wallets: List[Wallet], task_func, random_pause_wallet_after_co
 
         async def sem_task(wallet: Wallet):
             async with semaphore:
+                task_timeout_seconds = 3600
                 try:
-                    await task_func(wallet)
+                    await asyncio.wait_for(task_func(wallet), timeout=task_timeout_seconds)
+
+                except asyncio.TimeoutError:
+                    logger.error(f"[{wallet.id}] Core Execution Tasks | {task_func.__name__} timed out after {task_timeout_seconds} seconds")
+
                 except Exception as e:
                     logger.error(f"[{wallet.id}] failed: {e}")
 
