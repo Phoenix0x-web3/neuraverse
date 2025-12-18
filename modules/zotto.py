@@ -211,6 +211,7 @@ class ZottoSwap(Base):
                 return False
 
             swap_from_native = from_token.address.lower() == Contracts.ANKR.address.lower()
+            swap_to_native = to_token.address.lower() == Contracts.ANKR.address.lower()
 
             if not swap_from_native:
                 try:
@@ -246,7 +247,7 @@ class ZottoSwap(Base):
                         return False
 
             deadline_ms = int(time.time() * 1000) + (30 * 60 * 1000)
-            recipient_address = "0x0000000000000000000000000000000000000000" if swap_from_native else self.client.account.address
+            recipient_address = "0x0000000000000000000000000000000000000000" if swap_to_native else self.client.account.address
             contract = await self.client.contracts.get(Contracts.ZOTTO_ROUTER_ADDRESS)
             tx_value = amount.Wei if swap_from_native else 0
 
@@ -289,8 +290,9 @@ class ZottoSwap(Base):
 
                 calls = [bytes.fromhex(inner[2:])]
 
-                if not swap_from_native:
-                    unwrap_params = abi_encode(["uint256", "address"], [0, self.client.account.address])
+                if swap_to_native:
+                    unwrap_min = int(amount_out_min.Wei)
+                    unwrap_params = abi_encode(["uint256", "address"], [unwrap_min, self.client.account.address])
                     unwrap_call = bytes.fromhex("69bc35b2" + unwrap_params.hex())
                     calls.append(unwrap_call)
 
