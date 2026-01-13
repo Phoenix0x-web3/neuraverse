@@ -216,6 +216,7 @@ class NeuraVerse:
             headers = {"Referer": "https://neuraverse.neuraprotocol.io/?section=faucet"}
 
             response = await self.session.get(url="https://neuraverse.neuraprotocol.io/_next/static/chunks/333-ba15f8c47b5be486.js", headers=headers)
+            
             logger.debug(f"{self.wallet} | Faucet JS chunk status: {response.status_code}")
 
             if response.status_code != 200:
